@@ -1,0 +1,53 @@
+from fastapi import APIRouter
+from app.llm_config import llm_config, LLMConfigModel
+
+router = APIRouter(prefix="/system", tags=["system"])
+
+@router.get("/config", response_model=LLMConfigModel)
+async def get_system_config():
+    return llm_config.get_config()
+
+@router.post("/config", response_model=LLMConfigModel)
+async def update_system_config(config: LLMConfigModel):
+    llm_config.update_config(config)
+    return config
+
+import httpx
+from fastapi import HTTPException
+from typing import List, Dict
+
+@router.get("/models")
+async def get_models():
+    """Fetches available models from the configured LLM provider."""
+    cfg = llm_config.get_config()
+    base_url = cfg.chat_base_url.rstrip("/")
+    api_key = cfg.chat_api_key
+    
+    # Handle /v1 suffix if present or missing, usually we want {base}/models
+    # If user provided "http://localhost:1234/v1", we want "http://localhost:1234/v1/models"
+    # If user provided "http://localhost:1234", we might need "http://localhost:1234/v1/models"
+    # Let's assume the user configured the base_url correctly for the client (which usually expects /v1).
+    
+    target_url = f"{base_url}/models"
+    
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            headers = {}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            
+            resp = await client.get(target_url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            
+            # Standard OpenAI response format: { "data": [ {"id": "model-1"}, ... ] }
+            if "data" in data and isinstance(data["data"], list):
+                models = [item["id"] for item in data["data"] if "id" in item]
+                return {"models": models}
+            else:
+                return {"models": []} # Fallback
+                
+    except Exception as e:
+        print(f"Failed to fetch models: {e}")
+        # Don't crash, just return empty list so UI doesn't break
+        return {"models": [], "error": str(e)}

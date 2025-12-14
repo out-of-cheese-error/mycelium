@@ -1,0 +1,95 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# =========================
+# Node.js / Frontend
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+frontend/dist/
+
+# =========================
+# IDE / Editor
+# =========================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+
+# =========================
+# Environment & Secrets
+# =========================
+.env
+.env.local
+.env.*.local
+
+# LLM config contains API keys - use llm_config.example.json as template
+backend/llm_config.json
+
+# =========================
+# Application Data (User-specific)
+# =========================
+# Workspace data - contains user's knowledge graphs and notes
+backend/memory_data/
+
+# Old memories folder
+backend/memories/
+
+# Temporary files from document ingestion
+backend/temp/
+
+# Test data
+backend/test_memory_data/
+backend/tests/test_memory_data/
+
+# =========================
+# Misc
+# =========================
+*.bak
+*.tmp
+*.temp
+
