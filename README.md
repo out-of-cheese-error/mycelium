@@ -243,7 +243,24 @@ ollama pull nomic-embed-text
 
 ---
 
-## Running the Application
+## Running with Docker
+
+The easiest way to run MyCelium is using Docker:
+
+1. **Install Docker Desktop**
+2. **Run the application**:
+   ```bash
+   docker-compose up --build
+   ```
+3. **Access the App**:
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000/docs
+   
+---
+
+## Running Locally
+
+If you prefer to run without Docker:
 
 ### Start the Backend
 
