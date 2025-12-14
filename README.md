@@ -194,11 +194,15 @@ You can add knowledge to your graph in several ways:
 - **Web pages** - Ask the bot to read a URL: *"Summarize https://example.com/article"* (if the page is too long, it will automatically ingest it into the graph first, then summarize) 
 - **Project Gutenberg** - Ingest free ebooks: *"Find and ingest 'Pride and Prejudice' from Gutenberg"*
 
+![Ingesting Content](screenshots/ingestion.png)
+
 ### Exploring the Graph
 
 - Click the **Graph** tab to see your knowledge graph visualization
 - Click on nodes to see their details and connections
 - Ask the bot to explore connections: *"Traverse the graph from 'Machine Learning' and show me related concepts"*
+
+![Graph Visualization](screenshots/graph.png)
 
 ### Using Notes
 
@@ -207,12 +211,32 @@ You can add knowledge to your graph in several ways:
 - Search notes semantically: *"Search my notes for neural networks"*
 - Add and edit notes directly in the Notes tab, or ask the bot to help
 
+![Creating Notes](screenshots/notes_creation.png)
+![Viewing Notes](screenshots/notes_view.png)
+
 
 ### Concepts & Hot Topics
 
 - **Concepts** - Automatically clusters your graph into themes
 - **Hot Topics** - Shows the most connected nodes in your graph
 - **Connectors** - Identifies bridge nodes that connect different topics
+
+![Concepts](screenshots/concepts.png)
+![Connectors](screenshots/connectors.png)
+
+### Growth Engine
+
+- **Automated Research** - The bot proactively searches for information to fill gaps in its knowledge
+- **Recursive Expansion** - You set the depth and breadth, and the bot explores related concepts
+
+![Growth Engine](screenshots/growth.png)
+
+### Personality Sliders
+
+- **Dynamic Emotions** - Adjust the bot's emotional baseline (Happiness, Trust, Anger)
+- **Motive System** - The bot's responses change based on its current emotional state
+
+![Personality Sliders](screenshots/emotions.png)
 
 ---
 
