@@ -28,6 +28,80 @@ MyCelium combines the power of LLMs with a knowledge graph to create an AI assis
 
 ---
 
+## Usage Guide
+
+### Creating a Workspace
+
+1. Open the application in your browser
+2. Click the **+** button in the sidebar
+3. Enter a name for your workspace
+4. Click Create
+
+### Ingesting Content
+
+You can add knowledge to your graph in several ways:
+
+- **Chat naturally** - The bot automatically extracts entities and relationships from conversations
+- **Wikipedia** - Ask the bot to ingest a Wikipedia article: *"Ingest the Wikipedia article about quantum computing"*
+- **Web pages** - Ask the bot to read a URL: *"Summarize https://example.com/article"* (if the page is too long, it will automatically ingest it into the graph first, then summarize) 
+- **Project Gutenberg** - Ingest free ebooks: *"Find and ingest 'Pride and Prejudice' from Gutenberg"*
+
+![Ingesting Content](screenshots/ingestion.png)
+
+### Exploring the Graph
+
+- Click the **Graph** tab to see your knowledge graph visualization
+- Click on nodes to see their details and connections
+- Ask the bot to explore connections: *"Traverse the graph from 'Machine Learning' and show me related concepts"*
+
+![Graph Visualization](screenshots/graph.png)
+
+### Using Notes
+
+- Click the **Notes** tab to manage your notes
+- The bot can create notes for you: *"Create a note about our discussion on machine learning"*
+- Search notes semantically: *"Search my notes for neural networks"*
+- Add and edit notes directly in the Notes tab, or ask the bot to help
+
+![Creating Notes](screenshots/notes_creation.png)
+![Viewing Notes](screenshots/notes_view.png)
+
+
+### Concepts & Hot Topics
+
+- **Concepts** - Automatically clusters your graph into themes
+- **Hot Topics** - Shows the most connected nodes in your graph
+- **Connectors** - Identifies bridge nodes that connect different topics
+
+![Concepts](screenshots/concepts.png)
+![Connectors](screenshots/connectors.png)
+
+### Growth Engine
+
+- **Automated Research** - The bot proactively searches for information to fill gaps in its knowledge
+- **Recursive Expansion** - You set the depth and breadth, and the bot explores related concepts
+
+![Growth Engine](screenshots/growth.png)
+
+### Personality Sliders
+
+- **Dynamic Emotions** - Adjust the bot's emotional baseline (Happiness, Trust, Anger)
+- **Motive System** - The bot's responses change based on its current emotional state
+
+![Personality Sliders](screenshots/emotions.png)
+
+### Persona Configuration
+
+- **Magic Persona Generator** - Describe a character, and the AI will hallucinate a backstory, system prompt, and initial memories for it.
+- **Roleplay Mode** - The bot adopts the generated persona, including specific knowledge and emotional traits.
+
+<p float="left">
+  <img src="screenshots/persona_generator.png" width="49%" />
+  <img src="screenshots/persona_settings.png" width="49%" /> 
+</p>
+
+---
+
 ## Prerequisites
 
 - **Python 3.10+**
@@ -176,79 +250,7 @@ The UI will be available at `http://localhost:5173`
 
 ---
 
-## Usage Guide
 
-### Creating a Workspace
-
-1. Open the application in your browser
-2. Click the **+** button in the sidebar
-3. Enter a name for your workspace
-4. Click Create
-
-### Ingesting Content
-
-You can add knowledge to your graph in several ways:
-
-- **Chat naturally** - The bot automatically extracts entities and relationships from conversations
-- **Wikipedia** - Ask the bot to ingest a Wikipedia article: *"Ingest the Wikipedia article about quantum computing"*
-- **Web pages** - Ask the bot to read a URL: *"Summarize https://example.com/article"* (if the page is too long, it will automatically ingest it into the graph first, then summarize) 
-- **Project Gutenberg** - Ingest free ebooks: *"Find and ingest 'Pride and Prejudice' from Gutenberg"*
-
-![Ingesting Content](screenshots/ingestion.png)
-
-### Exploring the Graph
-
-- Click the **Graph** tab to see your knowledge graph visualization
-- Click on nodes to see their details and connections
-- Ask the bot to explore connections: *"Traverse the graph from 'Machine Learning' and show me related concepts"*
-
-![Graph Visualization](screenshots/graph.png)
-
-### Using Notes
-
-- Click the **Notes** tab to manage your notes
-- The bot can create notes for you: *"Create a note about our discussion on machine learning"*
-- Search notes semantically: *"Search my notes for neural networks"*
-- Add and edit notes directly in the Notes tab, or ask the bot to help
-
-![Creating Notes](screenshots/notes_creation.png)
-![Viewing Notes](screenshots/notes_view.png)
-
-
-### Concepts & Hot Topics
-
-- **Concepts** - Automatically clusters your graph into themes
-- **Hot Topics** - Shows the most connected nodes in your graph
-- **Connectors** - Identifies bridge nodes that connect different topics
-
-![Concepts](screenshots/concepts.png)
-![Connectors](screenshots/connectors.png)
-
-### Growth Engine
-
-- **Automated Research** - The bot proactively searches for information to fill gaps in its knowledge
-- **Recursive Expansion** - You set the depth and breadth, and the bot explores related concepts
-
-![Growth Engine](screenshots/growth.png)
-
-### Personality Sliders
-
-- **Dynamic Emotions** - Adjust the bot's emotional baseline (Happiness, Trust, Anger)
-- **Motive System** - The bot's responses change based on its current emotional state
-
-![Personality Sliders](screenshots/emotions.png)
-
-### Persona Configuration
-
-- **Magic Persona Generator** - Describe a character, and the AI will hallucinate a backstory, system prompt, and initial memories for it.
-- **Roleplay Mode** - The bot adopts the generated persona, including specific knowledge and emotional traits.
-
-<p float="left">
-  <img src="screenshots/persona_generator.png" width="49%" />
-  <img src="screenshots/persona_settings.png" width="49%" /> 
-</p>
-
----
 
 ## API Endpoints
 
