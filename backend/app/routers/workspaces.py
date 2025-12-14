@@ -405,12 +405,12 @@ async def generate_persona(workspace_id: str, request: GeneratePersonaRequest):
     You must output a valid JSON object with the following structure:
     {{
         "system_prompt": "A detailed system prompt describing the AI's role, tone, style, and constraints. Used for 'Base System Prompt'.",
-        "emotions": {
+        "emotions": {{
              "happiness": 0-100,
              "trust": 0-100,
              "anger": 0-100,
              "motive": "A primary driving goal or motive string."
-        },
+        }},
         "memories": {{
              "entities": [
                  {{ "name": "Name", "type": "Type", "description": "Backstory fact" }}

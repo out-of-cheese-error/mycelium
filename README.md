@@ -238,35 +238,15 @@ You can add knowledge to your graph in several ways:
 
 ![Personality Sliders](screenshots/emotions.png)
 
----
+### Persona Configuration
 
-## Project Structure
+- **Magic Persona Generator** - Describe a character, and the AI will hallucinate a backstory, system prompt, and initial memories for it.
+- **Roleplay Mode** - The bot adopts the generated persona, including specific knowledge and emotional traits.
 
-```
-graph-llm/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI application
-│   │   ├── agent.py             # LangGraph agent with tools
-│   │   ├── memory_store.py      # GraphMemory class (NetworkX + ChromaDB)
-│   │   ├── llm_config.py        # LLM configuration and factory
-│   │   ├── document_processor.py # Document ingestion
-│   │   ├── routers/             # API route handlers
-│   │   └── services/            # External service integrations
-│   ├── memory_data/             # Workspace data storage
-│   ├── requirements.txt
-│   └── llm_config.json          # LLM configuration (create this)
-│
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx              # Main React component
-│   │   ├── store.js             # Zustand state management
-│   │   └── components/          # UI components
-│   ├── package.json
-│   └── vite.config.js
-│
-└── README.md
-```
+<p float="left">
+  <img src="screenshots/persona_generator.png" width="49%" />
+  <img src="screenshots/persona_settings.png" width="49%" /> 
+</p>
 
 ---
 
@@ -299,46 +279,3 @@ The LangGraph agent has access to various tools:
 - **Learning**: `generate_lesson`
 
 ---
-
-
-## Architecture
-
-```mermaid
-graph TB
-    subgraph frontend [Frontend - React]
-        UI[Chat UI]
-        Graph[Graph Visualization]
-        Notes[Notes Manager]
-    end
-    
-    subgraph backend [Backend - FastAPI]
-        API[REST API]
-        Agent[LangGraph Agent]
-        Memory[GraphMemory]
-    end
-    
-    subgraph storage [Storage]
-        NetworkX[(NetworkX Graph)]
-        ChromaDB[(ChromaDB Vectors)]
-        JSON[(JSON Files)]
-    end
-    
-    subgraph llm [LLM Provider]
-        Ollama[Ollama]
-        LMStudio[LM Studio]
-        OpenAI[OpenAI API]
-    end
-    
-    UI --> API
-    Graph --> API
-    Notes --> API
-    API --> Agent
-    Agent --> Memory
-    Memory --> NetworkX
-    Memory --> ChromaDB
-    Agent --> JSON
-    Agent --> Ollama
-    Agent --> LMStudio
-    Agent --> OpenAI
-```
-
