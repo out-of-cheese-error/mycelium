@@ -98,6 +98,12 @@ class WorkspaceSettings(BaseModel):
     system_prompt: str = "You are a helpful assistant with a long-term memory."
     allow_search: bool = True
     enabled_tools: Optional[List[str]] = None
+    
+    # Context Settings (Per Workspace)
+    chat_message_limit: int = 20
+    graph_k: int = 3
+    graph_depth: int = 1
+    graph_include_descriptions: bool = False
 
 def get_config_path(workspace_id: str):
     return os.path.join(MEMORY_BASE_DIR, workspace_id, "config.json")

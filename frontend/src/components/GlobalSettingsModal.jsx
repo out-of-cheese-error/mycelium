@@ -18,12 +18,23 @@ const GlobalSettingsModal = ({ onClose }) => {
         ollama_base_url: 'http://localhost:11434',
         ollama_chat_model: '',
         ollama_embedding_model: '',
-        temperature: 0.7
+        temperature: 0.7,
+
+        // Context Settings (Moved to Workspace)
     });
-    // TTS Settings
-    const [ttsBaseUrl, setTtsBaseUrl] = useState('');
-    const [ttsModel, setTtsModel] = useState('');
-    const [ttsVoice, setTtsVoice] = useState('');
+    // Contemplation State
+    const [contemplateCount, setContemplateCount] = useState(3);
+    const [contextDepth, setContextDepth] = useState(1);
+    const [contemplateTopic, setContemplateTopic] = useState("");
+    const [saveToNotes, setSaveToNotes] = useState(false);
+    const [isContemplating, setIsContemplating] = useState(false);
+
+    // Context Settings (Workspace)
+    const [chatMessageLimit, setChatMessageLimit] = useState(20);
+    const [graphK, setGraphK] = useState(3);
+    const [graphDepth, setGraphDepth] = useState(1);
+    const [graphIncludeDesc, setGraphIncludeDesc] = useState(false);
+
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -32,7 +43,7 @@ const GlobalSettingsModal = ({ onClose }) => {
             if (data) {
                 setConfig({
                     provider: data.provider || 'lmstudio',
-                    
+
                     chat_base_url: data.chat_base_url || '',
                     chat_api_key: data.chat_api_key || '',
                     chat_model: data.chat_model || '',
@@ -46,13 +57,13 @@ const GlobalSettingsModal = ({ onClose }) => {
                     ollama_chat_model: data.ollama_chat_model || '',
                     ollama_embedding_model: data.ollama_embedding_model || '',
 
-                    tts_base_url: data.tts_base_url || '',
-                    tts_model: data.tts_model || '',
-                    tts_voice: data.tts_voice || '',
-                    tts_enabled: data.tts_enabled !== undefined ? data.tts_enabled : true,
-
                     reddit_user_agent: data.reddit_user_agent || ''
                 });
+                // Load Context Settings
+                setChatMessageLimit(data.chat_message_limit !== undefined ? data.chat_message_limit : 20);
+                setGraphK(data.graph_k !== undefined ? data.graph_k : 3);
+                setGraphDepth(data.graph_depth !== undefined ? data.graph_depth : 1);
+                setGraphIncludeDesc(data.graph_include_descriptions !== undefined ? data.graph_include_descriptions : false);
             }
             setIsLoading(false);
         };
@@ -71,6 +82,10 @@ const GlobalSettingsModal = ({ onClose }) => {
             await updateSystemConfig({
                 ...config,
                 temperature: parseFloat(config.temperature), // Ensure temperature is parsed as float
+                chat_message_limit: parseInt(config.chat_message_limit),
+                graph_k: parseInt(config.graph_k),
+                graph_depth: parseInt(config.graph_depth),
+                graph_include_descriptions: config.graph_include_descriptions
             });
             onClose();
         } catch (e) {
@@ -251,6 +266,8 @@ const GlobalSettingsModal = ({ onClose }) => {
                             </div>
                         </div>
                     )}
+
+
 
                     {/* TTS AND OTHER SETTINGS */}
                     <div className="space-y-4">

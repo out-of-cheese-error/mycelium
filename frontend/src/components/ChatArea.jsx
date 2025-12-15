@@ -226,6 +226,23 @@ const ChatArea = () => {
 // Memoized Message Component to prevent re-renders breaking selection
 // We pass primitives (role, content) instead of the full object to avoid reference equality issues with mutable store state
 const ChatMessage = React.memo(({ role, content, index, isPlaying, isLoadingAudio, onPlayAudio }) => {
+    // Extract token usage if present. Backend appends it for each step (tool use, etc.)
+    // We want to cleaner display: remove ALL distinct token strings from the text,
+    // and show the FINAL one in the footer.
+    const tokenRegexGlobal = /\*\((Tokens: .*?)\)\*/g;
+    let mainContent = content;
+    let tokenString = null;
+
+    if (role === 'assistant') {
+        const matches = [...content.matchAll(tokenRegexGlobal)];
+        if (matches.length > 0) {
+            // Use the last match for the footer info
+            tokenString = matches[matches.length - 1][1];
+            // Remove all matches from the visual content
+            mainContent = content.replace(tokenRegexGlobal, '').trim();
+        }
+    }
+
     return (
         <div className={`flex ${role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`relative max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed select-text ${role === 'user' ? 'bg-blue-600/90 text-white rounded-br-none' : 'bg-gray-800 text-gray-200 rounded-bl-none border border-gray-700'}`}>
@@ -238,10 +255,17 @@ const ChatMessage = React.memo(({ role, content, index, isPlaying, isLoadingAudi
                     pre: ({ node, ...props }) => <pre className="bg-black/30 p-2 rounded-lg my-2 overflow-x-auto select-text" {...props} />,
                     img: ({ node, ...props }) => <img className="rounded-lg max-w-full max-h-80 object-contain my-2 bg-black/50" {...props} />,
                 }}>
-                    {content}
+                    {mainContent}
                 </ReactMarkdown>
+
+                {tokenString && (
+                    <div className="mt-2 pt-2 border-t border-gray-700/50 text-[10px] text-gray-500 font-mono flex items-center justify-end">
+                        {tokenString}
+                    </div>
+                )}
+
                 {role === 'assistant' && (
-                    <button onClick={() => onPlayAudio(index, content)} className="absolute -bottom-6 left-0 text-gray-500 hover:text-purple-400 transition-colors p-1" title="Read Aloud">
+                    <button onClick={() => onPlayAudio(index, mainContent)} className="absolute -bottom-6 left-0 text-gray-500 hover:text-purple-400 transition-colors p-1" title="Read Aloud">
                         {isLoadingAudio ? <Loader size={14} className="animate-spin" /> : isPlaying ? <Square size={14} fill="currentColor" /> : <Volume2 size={14} />}
                     </button>
                 )}
