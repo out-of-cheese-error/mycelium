@@ -1026,9 +1026,10 @@ def generate_node(state: AgentState):
     except:
         pass
         
-    # We always keep SystemMessage (index 0).
-    # We take the LAST 'limit' messages from the rest.
-    history_messages = messages[1:]
+    # We take the LAST 'limit' messages.
+    # Note: 'messages' in state contains only Human/AI messages from history, 
+    # SystemMessage is injected below.
+    history_messages = messages
     if len(history_messages) > limit:
         history_messages = history_messages[-limit:]
         
