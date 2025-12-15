@@ -241,10 +241,10 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                                     tools.forEach(t => usedTools.add(t));
                                 });
 
-                                // Find "Other" tools
+                                // Find "Other" tools (Dynamic / MCP)
                                 const otherTools = availableTools.filter(t => !usedTools.has(t));
                                 if (otherTools.length > 0) {
-                                    categorizedTools["Other"] = otherTools;
+                                    categorizedTools["Custom / MCP"] = otherTools;
                                 }
 
                                 return Object.entries(categorizedTools).map(([category, tools]) => {

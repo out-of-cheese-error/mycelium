@@ -11,6 +11,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_community.tools import DuckDuckGoSearchRun
 from app.memory_store import GraphMemory
 from app.llm_config import llm_config
+from app.services.mcp_service import mcp_service
 from langchain_core.tools import tool
 
 @tool
@@ -780,6 +781,11 @@ tools = [
     search_biorxiv, read_biorxiv_abstract
 ]
 
+async def get_all_tools():
+    """Combines static tools with dynamic MCP tools."""
+    mcp_tools = await mcp_service.get_all_tools()
+    return tools + mcp_tools
+
 # --- Helper ---
 def get_llm():
     return llm_config.get_chat_llm()
@@ -897,7 +903,7 @@ def retrieve_node(state: AgentState):
 
     return {"context": context}
 
-def generate_node(state: AgentState):
+async def generate_node(state: AgentState):
     """Generates a response using the LLM and the retrieved context."""
     context = state["context"]
     messages = state["messages"]
@@ -1037,29 +1043,22 @@ def generate_node(state: AgentState):
     
     llm = get_llm()
     
+    # DYNAMIC TOOL LOADING
+    current_tools = await get_all_tools()
     final_tools = []
     
     if enabled_tools is not None:
-        # Strict filtering based on "enabled_tools" list
-        # If list is empty, NO tools are enabled.
-        # Check against t.name
         safe_list = set(enabled_tools)
-        final_tools = [t for t in tools if t.name in safe_list]
+        final_tools = [t for t in current_tools if t.name in safe_list]
     else:
-        # Legacy/Default Mode: logic based on allow_search
-        # Always include note tools + others, filter search if needed
-        # Actually in "all enabled" mode we include everything.
-        # But if allow_search is false, we remove search.
         if allow_search:
-             final_tools = tools
+             final_tools = current_tools
         else:
-             final_tools = [t for t in tools if not (isinstance(t, DuckDuckGoSearchRun) or t.name == "search_images")]
+             final_tools = [t for t in current_tools if not (isinstance(t, DuckDuckGoSearchRun) or t.name == "search_images")]
              
-    # Clean binding
-    # Clean binding
     if final_tools:
         llm_with_tools = llm.bind_tools(final_tools)
-        response = llm_with_tools.invoke(prompt_messages)
+        response = await llm_with_tools.ainvoke(prompt_messages)
         
         # ---------------------------------------------------------
         # ROBUSTNESS FIX: Force inject workspace_id into tool calls
@@ -1089,9 +1088,7 @@ def generate_node(state: AgentState):
                         tc["args"]["workspace_id"] = workspace_id
     else:
         # No tools available
-        response = llm.invoke(prompt_messages)
-
-    return {"messages": [response]}
+        response = await llm.ainvoke(prompt_messages)
 
     return {"messages": [response]}
 
@@ -1183,6 +1180,7 @@ def extract_knowledge_node(state: AgentState):
         
     return {}
 
+
 def update_emotions_node(state: AgentState):
     """Analyzes the interaction to update the bot's emotional state."""
     workspace_id = state.get("workspace_id", "default")
@@ -1272,9 +1270,18 @@ def update_emotions_node(state: AgentState):
 # --- Graph Definition ---
 workflow = StateGraph(AgentState)
 
+async def dynamic_tool_node(state: AgentState):
+    """Executes tools dynamically fetched from the service."""
+    # We re-fetch tools to ensure we have the latest definitions
+    current_tools = await get_all_tools()
+    # We use the standard ToolNode logic but initialized with current tools
+    # ToolNode is callable, so we just invoke it
+    node = ToolNode(current_tools)
+    return await node.invoke(state)
+
 workflow.add_node("retrieve", retrieve_node)
 workflow.add_node("generate", generate_node)
-workflow.add_node("tools", ToolNode(tools))
+workflow.add_node("tools", dynamic_tool_node)
 workflow.add_node("extract", extract_knowledge_node)
 workflow.add_node("update_emotions", update_emotions_node)
 

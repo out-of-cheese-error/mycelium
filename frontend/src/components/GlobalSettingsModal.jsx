@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Server, RefreshCw } from 'lucide-react';
+import { X, Save, Server, RefreshCw, Plus, Trash2, Edit } from 'lucide-react';
 import { useStore } from '../store';
 
 const GlobalSettingsModal = ({ onClose }) => {
-    const { fetchSystemConfig, updateSystemConfig, fetchModels } = useStore();
+    const { fetchSystemConfig, updateSystemConfig, fetchModels, fetchMCPServers, addMCPServer, removeMCPServer, updateMCPServer, restartMCPServices } = useStore();
     const [availableModels, setAvailableModels] = useState([]);
     const [isFetchingModels, setIsFetchingModels] = useState(false);
 
@@ -37,9 +37,20 @@ const GlobalSettingsModal = ({ onClose }) => {
 
     const [isLoading, setIsLoading] = useState(true);
 
+    // MCP State
+    const [mcpServers, setMcpServers] = useState([]);
+    const [isEditingMcp, setIsEditingMcp] = useState(false);
+    const [mcpForm, setMcpForm] = useState({ name: '', command: '', args: '', env: '' });
+
     useEffect(() => {
         const load = async () => {
-            const data = await fetchSystemConfig();
+            const [data, servers] = await Promise.all([
+                fetchSystemConfig(),
+                fetchMCPServers()
+            ]);
+
+            if (servers) setMcpServers(servers);
+
             if (data) {
                 setConfig({
                     provider: data.provider || 'lmstudio',
@@ -57,8 +68,14 @@ const GlobalSettingsModal = ({ onClose }) => {
                     ollama_chat_model: data.ollama_chat_model || '',
                     ollama_embedding_model: data.ollama_embedding_model || '',
 
+                    tts_base_url: data.tts_base_url || '',
+                    tts_model: data.tts_model || '',
+                    tts_voice: data.tts_voice || '',
+                    tts_enabled: data.tts_enabled !== undefined ? data.tts_enabled : true,
+
                     reddit_user_agent: data.reddit_user_agent || ''
                 });
+
                 // Load Context Settings
                 setChatMessageLimit(data.chat_message_limit !== undefined ? data.chat_message_limit : 20);
                 setGraphK(data.graph_k !== undefined ? data.graph_k : 3);
@@ -69,6 +86,55 @@ const GlobalSettingsModal = ({ onClose }) => {
         };
         load();
     }, []);
+
+    const refreshMcp = async () => {
+        const servers = await fetchMCPServers();
+        if (servers) setMcpServers(servers);
+    };
+
+    const handleSaveMcp = async () => {
+        if (!mcpForm.name || !mcpForm.command) {
+            alert("Name and Command are required.");
+            return;
+        }
+
+        const payload = {
+            name: mcpForm.name,
+            command: mcpForm.command,
+            args: mcpForm.args.split(' ').filter(x => x.trim()),
+            env: mcpForm.env.split(',').reduce((acc, curr) => {
+                const [k, v] = curr.split('=');
+                if (k && v) acc[k.trim()] = v.trim();
+                return acc;
+            }, {}),
+            enabled: true
+        };
+
+        if (isEditingMcp) {
+            await updateMCPServer(payload);
+        } else {
+            await addMCPServer(payload);
+        }
+
+        setIsEditingMcp(false);
+        setMcpForm({ name: '', command: '', args: '', env: '' });
+        refreshMcp();
+    };
+
+    const handleRemoveMcp = async (name) => {
+        await removeMCPServer(name);
+        refreshMcp();
+    };
+
+    const handleEditMcp = (server) => {
+        setMcpForm({
+            name: server.name,
+            command: server.command,
+            args: server.args.join(' '),
+            env: Object.entries(server.env).map(([k, v]) => `${k}=${v}`).join(',')
+        });
+        setIsEditingMcp(true);
+    };
 
     const handleFetchModels = async () => {
         setIsFetchingModels(true);
@@ -323,8 +389,88 @@ const GlobalSettingsModal = ({ onClose }) => {
                         </div>
 
 
+                        {/* MCP SERVERS CONFIG */}
+                        <div className="space-y-4 pt-4 border-t border-gray-800">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-bold text-gray-400">MCP Servers</h3>
+                                <button onClick={restartMCPServices} className="p-1 hover:bg-gray-800 rounded text-gray-500" title="Restart Services">
+                                    <RefreshCw size={14} />
+                                </button>
+                            </div>
 
+                            {/* Validated Servers List */}
+                            <div className="space-y-2">
+                                {mcpServers.map(server => (
+                                    <div key={server.name} className="flex items-center justify-between p-3 bg-black border border-gray-700 rounded-lg">
+                                        <div>
+                                            <div className="text-sm font-bold text-gray-200">{server.name}</div>
+                                            <div className="text-xs text-gray-500 font-mono">{server.command} {server.args.join(' ')}</div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => handleEditMcp(server)} className="text-blue-400 hover:text-white p-1">
+                                                <Edit size={14} />
+                                            </button>
+                                            <button onClick={() => handleRemoveMcp(server.name)} className="text-red-400 hover:text-white p-1">
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Add/Edit Form */}
+                            <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                                <h4 className="text-xs font-bold text-purple-400 mb-3 uppercase">
+                                    {isEditingMcp ? `Edit ${mcpForm.name}` : "Add New Server"}
+                                </h4>
+                                <div className="space-y-3">
+                                    <div>
+                                        <input
+                                            className="w-full bg-black border border-gray-600 rounded px-2 py-1 text-sm text-white"
+                                            placeholder="Server Name (e.g. filesystem)"
+                                            value={mcpForm.name}
+                                            onChange={e => setMcpForm({ ...mcpForm, name: e.target.value })}
+                                            disabled={isEditingMcp} // Name is ID for now
+                                        />
+                                    </div>
+                                    <div>
+                                        <input
+                                            className="w-full bg-black border border-gray-600 rounded px-2 py-1 text-sm text-white font-mono"
+                                            placeholder="Command (e.g. npx, python)"
+                                            value={mcpForm.command}
+                                            onChange={e => setMcpForm({ ...mcpForm, command: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <input
+                                            className="w-full bg-black border border-gray-600 rounded px-2 py-1 text-sm text-white font-mono"
+                                            placeholder="Args (e.g. -y @modelcontextprotocol/server-filesystem /path)"
+                                            value={mcpForm.args}
+                                            onChange={e => setMcpForm({ ...mcpForm, args: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="flex justify-end gap-2 pt-2">
+                                        {isEditingMcp && (
+                                            <button
+                                                onClick={() => { setIsEditingMcp(false); setMcpForm({ name: '', command: '', args: '', env: '' }); }}
+                                                className="px-3 py-1 text-xs text-gray-400 hover:text-white"
+                                            >
+                                                Cancel
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={handleSaveMcp}
+                                            className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-bold flex items-center gap-1"
+                                        >
+                                            <Plus size={12} />
+                                            {isEditingMcp ? "Update Server" : "Add Server"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+
                 </div>
 
                 <div className="p-4 border-t border-gray-800 flex justify-end">
@@ -337,7 +483,7 @@ const GlobalSettingsModal = ({ onClose }) => {
                     </button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

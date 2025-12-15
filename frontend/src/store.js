@@ -613,6 +613,58 @@ export const useStore = create((set, get) => ({
         }
     },
 
+    // MCP Methods
+    fetchMCPServers: async () => {
+        try {
+            const res = await axios.get(`${API_base}/mcp/servers`);
+            return res.data;
+        } catch (e) {
+            console.error("Fetch MCP servers failed", e);
+            return [];
+        }
+    },
+
+    addMCPServer: async (server) => {
+        try {
+            const res = await axios.post(`${API_base}/mcp/servers`, server);
+            return res.data;
+        } catch (e) {
+            const msg = e.response?.data?.detail || e.message;
+            alert(`Failed to add server: ${msg}`);
+            throw e;
+        }
+    },
+
+    updateMCPServer: async (server) => {
+        try {
+            const res = await axios.put(`${API_base}/mcp/servers/${server.name}`, server);
+            return res.data;
+        } catch (e) {
+            const msg = e.response?.data?.detail || e.message;
+            alert(`Failed to update server: ${msg}`);
+            throw e;
+        }
+    },
+
+    removeMCPServer: async (name) => {
+        if (!confirm(`Remove MCP Server "${name}"?`)) return;
+        try {
+            await axios.delete(`${API_base}/mcp/servers/${name}`);
+        } catch (e) {
+            const msg = e.response?.data?.detail || e.message;
+            alert(`Failed to delete server: ${msg}`);
+        }
+    },
+
+    restartMCPServices: async () => {
+        try {
+            await axios.post(`${API_base}/mcp/restart`);
+            alert("MCP Services restarted.");
+        } catch (e) {
+            alert("Failed to restart services.");
+        }
+    },
+
     growLogs: {}, // { [workspaceId]: [] }
 
     grow: async (n, topic = null, save_to_notes = false, workspaceId = null, depth = 1) => {

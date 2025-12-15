@@ -34,6 +34,9 @@ class LLMConfigModel(BaseModel):
     # Reddit Settings
     reddit_user_agent: str = "python:graph_chat_agent:v1.0 (public access)"
 
+    # MCP Settings
+    mcp_servers: dict[str, dict] = {} # { "server_name": { "command": "cmd", "args": [], "env": {} } }
+
 class LLMConfig:
     _instance = None
 
