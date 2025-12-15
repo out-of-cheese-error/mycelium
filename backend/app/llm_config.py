@@ -34,6 +34,12 @@ class LLMConfigModel(BaseModel):
     # Reddit Settings
     reddit_user_agent: str = "python:graph_chat_agent:v1.0 (public access)"
 
+    # Context Settings
+    chat_message_limit: int = 10
+    graph_k: int = 3
+    graph_depth: int = 1
+    graph_include_descriptions: bool = False
+
 class LLMConfig:
     _instance = None
 

@@ -251,8 +251,8 @@ class GraphMemory:
             self.graph.remove_edge(source, target)
             self.save_graph()
 
-    def retrieve_context(self, query: str, k: int = 3) -> str:
-        """Retrieves relevant subgraph context based on vector similarity."""
+    def retrieve_context(self, query: str, k: int = 3, depth: int = 1, include_descriptions: bool = False) -> str:
+        """Retrieves relevant subgraph context based on vector similarity and traversal depth."""
         query_embedding = self.embedding_fn.embed_query(query)
         results = self.collection.query(
             query_embeddings=[query_embedding],
@@ -263,21 +263,46 @@ class GraphMemory:
             print("DEBUG: No relevant embeddings found.")
             return ""
 
-        print(f"DEBUG: Found {len(results['ids'][0])} relevant nodes in vector store.")
-        context_lines = []
-        found_entities = results['ids'][0]
+        print(f"DEBUG: Found {len(results['ids'][0])} relevant nodes in vector store. Traversal Depth: {depth}")
         
-        # 1. Get detailed info for found entities
-        for entity_id in found_entities:
+        # BFS Traversal
+        visited = set()
+        queue = []
+        
+        # Initialize queue with found entities (Depth 0)
+        for entity_id in results['ids'][0]:
             if self.graph.has_node(entity_id):
-                node_data = self.graph.nodes[entity_id]
-                context_lines.append(f"Entity: {entity_id} ({node_data.get('type')}) - {node_data.get('description')}")
+                queue.append((entity_id, 0))
+                visited.add(entity_id)
+
+        context_lines = []
+        
+        # Process Queue
+        while queue:
+            current_id, current_dist = queue.pop(0)
+            
+            # 1. Expand current node
+            node_data = self.graph.nodes[current_id]
+            desc = f" - {node_data.get('description')}" if (current_dist == 0 or include_descriptions) else ""
+            context_lines.append(f"Entity (Depth {current_dist}): {current_id} ({node_data.get('type')}){desc}")
+            
+            # Stop if we reached max depth
+            if current_dist >= depth:
+                continue
+            
+            # 2. Get Neighbors
+            neighbors = list(self.graph.neighbors(current_id))
+            for neighbor in neighbors:
+                edge_data = self.graph.get_edge_data(current_id, neighbor)
+                relation = edge_data.get('relation')
                 
-                # 2. Get immediate neighbors (1-hop)
-                neighbors = list(self.graph.neighbors(entity_id))
-                for neighbor in neighbors:
-                    edge_data = self.graph.get_edge_data(entity_id, neighbor)
-                    context_lines.append(f"  - Related to {neighbor} via '{edge_data.get('relation')}'")
+                # Add relationship context
+                context_lines.append(f"  - Related to {neighbor} via '{relation}'")
+                
+                # Add to queue if not visited
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, current_dist + 1))
 
         return "\n".join(context_lines)
 

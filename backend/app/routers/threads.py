@@ -147,6 +147,29 @@ async def chat_in_thread(workspace_id: str, thread_id: str, request: ChatRequest
                             full_response += content
                             yield content
 
+                # 1.5 Capture Token Usage
+                elif kind == "on_chat_model_end":
+                     if event.get("metadata", {}).get("langgraph_node") == "generate":
+                         # Only final node
+                         output_data = event["data"]["output"]
+                         # output_data might be an AIMessage object OR a dict depending on serializer
+                         usage = None
+                         
+                         if hasattr(output_data, "usage_metadata"):
+                             usage = output_data.usage_metadata
+                         elif isinstance(output_data, dict):
+                             usage = output_data.get("usage_metadata")
+                             
+                         if usage:
+                             input_tokens = usage.get("input_tokens", 0)
+                             output_tokens = usage.get("output_tokens", 0)
+                             usage_str = f"\n\n*(Tokens: {input_tokens} input, {output_tokens} output)*"
+                             
+                             # Append to full response for storage
+                             full_response += usage_str
+                             # Stream via yield
+                             yield usage_str
+
                 # 2. Output Tool Usage (Progress Indicators)
                 elif kind == "on_tool_start" and name not in ["tools", "__start__"]:
                     # We want to show real tools, not the "tools" node itself

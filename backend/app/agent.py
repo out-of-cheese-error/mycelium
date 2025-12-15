@@ -798,6 +798,20 @@ def retrieve_node(state: AgentState):
     # Instantiate memory for this workspace
     memory_store = GraphMemory(workspace_id=workspace_id)
     
+    # Load Config for Graph K
+    k = 3
+    depth = 1
+    include_descriptions = False
+    
+    try:
+        from app.llm_config import llm_config
+        cfg = llm_config.get_config()
+        k = cfg.graph_k
+        depth = cfg.graph_depth
+        include_descriptions = cfg.graph_include_descriptions
+    except:
+        pass
+        
     last_message = state["messages"][-1]
     context = ""
     
@@ -860,7 +874,7 @@ def retrieve_node(state: AgentState):
 
         # 2. Vector Search (Standard RAG)
         try:
-            rag_context = memory_store.retrieve_context(content_text)
+            rag_context = memory_store.retrieve_context(content_text, k=k, depth=depth, include_descriptions=include_descriptions)
         except Exception as e:
             print(f"WARNING: Retrieval failed: {e}")
             rag_context = ""
@@ -994,7 +1008,23 @@ def generate_node(state: AgentState):
     - PROACTIVELY PROMOTE your Graph capabilities: Tell the user you can "traverse the graph" or "trace relationships" for specific entities to uncover deeper connections if they wish.
     """
     
-    prompt_messages = [SystemMessage(content=system_prompt)] + messages
+    
+    # Apply Chat Message Limit
+    limit = 10
+    try:
+        from app.llm_config import llm_config
+        cfg = llm_config.get_config()
+        limit = cfg.chat_message_limit
+    except:
+        pass
+        
+    # We always keep SystemMessage (index 0).
+    # We take the LAST 'limit' messages from the rest.
+    history_messages = messages[1:]
+    if len(history_messages) > limit:
+        history_messages = history_messages[-limit:]
+        
+    prompt_messages = [SystemMessage(content=system_prompt)] + history_messages
     
     llm = get_llm()
     
