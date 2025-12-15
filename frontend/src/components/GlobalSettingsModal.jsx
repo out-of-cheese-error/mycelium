@@ -20,16 +20,21 @@ const GlobalSettingsModal = ({ onClose }) => {
         ollama_embedding_model: '',
         temperature: 0.7,
 
-        // Context Settings
-        chat_message_limit: 10,
-        graph_k: 3,
-        graph_depth: 1,
-        graph_include_descriptions: false
+        // Context Settings (Moved to Workspace)
     });
-    // TTS Settings
-    const [ttsBaseUrl, setTtsBaseUrl] = useState('');
-    const [ttsModel, setTtsModel] = useState('');
-    const [ttsVoice, setTtsVoice] = useState('');
+    // Contemplation State
+    const [contemplateCount, setContemplateCount] = useState(3);
+    const [contextDepth, setContextDepth] = useState(1);
+    const [contemplateTopic, setContemplateTopic] = useState("");
+    const [saveToNotes, setSaveToNotes] = useState(false);
+    const [isContemplating, setIsContemplating] = useState(false);
+
+    // Context Settings (Workspace)
+    const [chatMessageLimit, setChatMessageLimit] = useState(20);
+    const [graphK, setGraphK] = useState(3);
+    const [graphDepth, setGraphDepth] = useState(1);
+    const [graphIncludeDesc, setGraphIncludeDesc] = useState(false);
+
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -52,18 +57,13 @@ const GlobalSettingsModal = ({ onClose }) => {
                     ollama_chat_model: data.ollama_chat_model || '',
                     ollama_embedding_model: data.ollama_embedding_model || '',
 
-                    tts_base_url: data.tts_base_url || '',
-                    tts_model: data.tts_model || '',
-                    tts_voice: data.tts_voice || '',
-                    tts_enabled: data.tts_enabled !== undefined ? data.tts_enabled : true,
-
-                    reddit_user_agent: data.reddit_user_agent || '',
-
-                    chat_message_limit: data.chat_message_limit || 10,
-                    graph_k: data.graph_k || 3,
-                    graph_depth: data.graph_depth || 1,
-                    graph_include_descriptions: data.graph_include_descriptions || false
+                    reddit_user_agent: data.reddit_user_agent || ''
                 });
+                // Load Context Settings
+                setChatMessageLimit(data.chat_message_limit !== undefined ? data.chat_message_limit : 20);
+                setGraphK(data.graph_k !== undefined ? data.graph_k : 3);
+                setGraphDepth(data.graph_depth !== undefined ? data.graph_depth : 1);
+                setGraphIncludeDesc(data.graph_include_descriptions !== undefined ? data.graph_include_descriptions : false);
             }
             setIsLoading(false);
         };
@@ -268,59 +268,6 @@ const GlobalSettingsModal = ({ onClose }) => {
                     )}
 
 
-
-                    {/* CONTEXT SETTINGS */}
-                    <div className="space-y-4">
-                        <h3 className="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1">Context Settings</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Chat Window (Messages)</label>
-                                <input
-                                    type="number"
-                                    min="1" max="100"
-                                    className="w-full bg-black border border-gray-700 rounded p-2 text-sm text-gray-300 focus:border-purple-500 focus:outline-none"
-                                    value={config.chat_message_limit || 10}
-                                    onChange={e => setConfig({ ...config, chat_message_limit: e.target.value })}
-                                />
-                                <p className="text-[10px] text-gray-500 mt-1">Number of past messages to send to LLM.</p>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Graph Depth (k)</label>
-                                <input
-                                    type="number"
-                                    min="1" max="20"
-                                    className="w-full bg-black border border-gray-700 rounded p-2 text-sm text-gray-300 focus:border-purple-500 focus:outline-none"
-                                    value={config.graph_k || 3}
-                                    onChange={e => setConfig({ ...config, graph_k: e.target.value })}
-                                />
-                                <p className="text-[10px] text-gray-500 mt-1">Number of graph nodes to retrieve for context.</p>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Traversal Depth</label>
-                                <input
-                                    type="number"
-                                    min="0" max="3"
-                                    className="w-full bg-black border border-gray-700 rounded p-2 text-sm text-gray-300 focus:border-purple-500 focus:outline-none"
-                                    value={config.graph_depth !== undefined ? config.graph_depth : 1}
-                                    onChange={e => setConfig({ ...config, graph_depth: e.target.value })}
-                                />
-                                <p className="text-[10px] text-gray-500 mt-1">Hops to traverse from found nodes (BFS).</p>
-                            </div>
-                            <div className="flex flex-col justify-center">
-                                <div className="flex items-center gap-2 mt-4">
-                                    <input
-                                        type="checkbox"
-                                        id="graphDesc"
-                                        checked={config.graph_include_descriptions}
-                                        onChange={e => setConfig({ ...config, graph_include_descriptions: e.target.checked })}
-                                        className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500"
-                                    />
-                                    <label htmlFor="graphDesc" className="text-xs font-bold text-gray-500 uppercase cursor-pointer">Include Neighbor Desc.</label>
-                                </div>
-                                <p className="text-[10px] text-gray-500 mt-1">Include descriptions for traversed neighbor nodes.</p>
-                            </div>
-                        </div>
-                    </div>
 
                     {/* TTS AND OTHER SETTINGS */}
                     <div className="space-y-4">

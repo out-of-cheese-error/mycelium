@@ -798,19 +798,23 @@ def retrieve_node(state: AgentState):
     # Instantiate memory for this workspace
     memory_store = GraphMemory(workspace_id=workspace_id)
     
-    # Load Config for Graph K
+    # Load Config from Workspace Settings
     k = 3
     depth = 1
     include_descriptions = False
     
     try:
-        from app.llm_config import llm_config
-        cfg = llm_config.get_config()
-        k = cfg.graph_k
-        depth = cfg.graph_depth
-        include_descriptions = cfg.graph_include_descriptions
-    except:
-        pass
+        import os
+        import json
+        config_path = os.path.join("memory_data", workspace_id, "config.json")
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                ws_config = json.load(f)
+                k = ws_config.get("graph_k", 3)
+                depth = ws_config.get("graph_depth", 1)
+                include_descriptions = ws_config.get("graph_include_descriptions", False)
+    except Exception as e:
+        print(f"Error loading workspace config for graph: {e}")
         
     last_message = state["messages"][-1]
     context = ""
@@ -1009,12 +1013,16 @@ def generate_node(state: AgentState):
     """
     
     
-    # Apply Chat Message Limit
-    limit = 10
+    # Apply Chat Message Limit (Workspace Scoped)
+    limit = 20
     try:
-        from app.llm_config import llm_config
-        cfg = llm_config.get_config()
-        limit = cfg.chat_message_limit
+        import os
+        import json
+        config_path = os.path.join("memory_data", workspace_id, "config.json")
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                ws_config = json.load(f)
+                limit = ws_config.get("chat_message_limit", 20)
     except:
         pass
         

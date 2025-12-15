@@ -23,6 +23,12 @@ const SettingsModal = ({ workspaceId, onClose }) => {
     const [saveToNotes, setSaveToNotes] = useState(false);
     const [isContemplating, setIsContemplating] = useState(false);
 
+    // Context Settings (Workspace)
+    const [chatMessageLimit, setChatMessageLimit] = useState(20);
+    const [graphK, setGraphK] = useState(3);
+    const [graphDepth, setGraphDepth] = useState(1);
+    const [graphIncludeDesc, setGraphIncludeDesc] = useState(false);
+
     // Rename State
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameValue, setRenameValue] = useState(workspaceId);
@@ -71,10 +77,14 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                     setEnabledTools(settings.enabled_tools);
                 } else {
                     // Default: All tools enabled
-                    // (Unless allow_search is false, then filter search? simpler to just enable all for new UI users)
-                    // User requested "default everything on".
                     setEnabledTools(tools || []);
                 }
+
+                // Load Context Settings
+                setChatMessageLimit(settings.chat_message_limit !== undefined ? settings.chat_message_limit : 20);
+                setGraphK(settings.graph_k !== undefined ? settings.graph_k : 3);
+                setGraphDepth(settings.graph_depth !== undefined ? settings.graph_depth : 1);
+                setGraphIncludeDesc(settings.graph_include_descriptions !== undefined ? settings.graph_include_descriptions : false);
             }
             setIsLoading(false);
         };
@@ -87,7 +97,13 @@ const SettingsModal = ({ workspaceId, onClose }) => {
             await updateWorkspaceSettings(workspaceId, {
                 system_prompt: systemPrompt,
                 enabled_tools: enabledTools,
-                allow_search: true // Deprecated/Legacy, always true if list is used
+                allow_search: true, // Deprecated/Legacy
+
+                // Context Settings
+                chat_message_limit: parseInt(chatMessageLimit),
+                graph_k: parseInt(graphK),
+                graph_depth: parseInt(graphDepth),
+                graph_include_descriptions: graphIncludeDesc
             });
             onClose();
         } catch (e) {
@@ -150,6 +166,54 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                         <p className="text-xs text-gray-600 mt-2">
                             This prompt defines how the AI behaves and responds within this workspace.
                         </p>
+                    </div>
+
+                    {/* CONTEXT SETTINGS */}
+                    <div className="pt-4 border-t border-gray-800">
+                        <label className="block text-sm font-bold text-blue-400 mb-2">Context Settings</label>
+                        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Chat Window</label>
+                                    <input
+                                        type="number" min="1" max="100"
+                                        className="w-full bg-black border border-gray-600 rounded px-2 py-1 text-sm text-gray-300 focus:border-blue-500 focus:outline-none"
+                                        value={chatMessageLimit}
+                                        onChange={e => setChatMessageLimit(e.target.value)}
+                                    />
+                                    <p className="text-[10px] text-gray-500 mt-1">Max past messages.</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Graph Nodes (k)</label>
+                                    <input
+                                        type="number" min="1" max="20"
+                                        className="w-full bg-black border border-gray-600 rounded px-2 py-1 text-sm text-gray-300 focus:border-blue-500 focus:outline-none"
+                                        value={graphK}
+                                        onChange={e => setGraphK(e.target.value)}
+                                    />
+                                    <p className="text-[10px] text-gray-500 mt-1">Start nodes retrieved.</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Traversal Depth</label>
+                                    <input
+                                        type="number" min="0" max="3"
+                                        className="w-full bg-black border border-gray-600 rounded px-2 py-1 text-sm text-gray-300 focus:border-blue-500 focus:outline-none"
+                                        value={graphDepth}
+                                        onChange={e => setGraphDepth(e.target.value)}
+                                    />
+                                    <p className="text-[10px] text-gray-500 mt-1">Hops from start nodes.</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox" id="wsGraphDesc"
+                                    checked={graphIncludeDesc}
+                                    onChange={e => setGraphIncludeDesc(e.target.checked)}
+                                    className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"
+                                />
+                                <label htmlFor="wsGraphDesc" className="text-xs font-bold text-gray-400 uppercase cursor-pointer">Include Neighbor Descriptions</label>
+                            </div>
+                        </div>
                     </div>
 
                     <div>
