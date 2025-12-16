@@ -26,8 +26,11 @@ const Sidebar = () => {
         emotions,
         updateEmotions,
         ingestJobs,
-        stopIngest
+        stopIngest,
+        fetchAvailableTools
     } = useStore();
+
+    const [availableTools, setAvailableTools] = useState({ builtin: [], mcp: [] });
 
     const [isCreating, setIsCreating] = useState(false);
     const [newWsName, setNewWsName] = useState('');
@@ -39,6 +42,14 @@ const Sidebar = () => {
 
     useEffect(() => {
         fetchWorkspaces();
+        fetchAvailableTools().then(tools => {
+            if (tools && (tools.builtin || tools.mcp)) {
+                setAvailableTools(tools);
+            } else if (Array.isArray(tools)) {
+                // Fallback for old API if needed, though we updated it
+                setAvailableTools({ builtin: tools, mcp: [] });
+            }
+        });
     }, []);
 
     const handleCreate = () => {
@@ -258,6 +269,44 @@ const Sidebar = () => {
                             ))}
                             {threads.length === 0 && (
                                 <div className="px-3 py-2 text-xs text-gray-600 italic">No chats yet.</div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* TOOLS LIST */}
+                {currentWorkspace && (
+                    <div className="px-2 mt-4 mb-4">
+                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider px-2 mb-2">Tools</h3>
+                        <div className="space-y-3 px-3">
+                            {/* Built-in Tools */}
+                            <div className="space-y-1">
+                                <h4 className="text-[10px] uppercase text-gray-600 font-semibold">Built-in</h4>
+                                <div className="flex flex-wrap gap-1">
+                                    {availableTools.builtin.map(t => (
+                                        <span key={t} className="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700" title={t}>
+                                            {t}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* MCP Tools */}
+                            {availableTools.mcp.length > 0 && (
+                                <div className="space-y-1">
+                                    <h4 className="text-[10px] uppercase text-purple-400 font-semibold">MCP Tools</h4>
+                                    <div className="flex flex-wrap gap-1">
+                                        {availableTools.mcp.map(t => (
+                                            <span key={t} className="text-[10px] bg-purple-900/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-800" title={t}>
+                                                {t}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {availableTools.mcp.length === 0 && (
+                                <div className="text-[10px] text-gray-600 italic">No MCP tools loaded.</div>
                             )}
                         </div>
                     </div>

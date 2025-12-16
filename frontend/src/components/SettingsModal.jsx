@@ -62,12 +62,20 @@ const SettingsModal = ({ workspaceId, onClose }) => {
     useEffect(() => {
         const load = async () => {
             // Parallel fetch
-            const [settings, tools] = await Promise.all([
+            const [settings, toolsData] = await Promise.all([
                 fetchWorkspaceSettings(workspaceId),
                 fetchAvailableTools()
             ]);
 
-            setAvailableTools(tools || []);
+            // Handle new API format (object) or old (array)
+            let flatTools = [];
+            if (toolsData && (toolsData.builtin || toolsData.mcp)) {
+                flatTools = [...(toolsData.builtin || []), ...(toolsData.mcp || [])];
+            } else if (Array.isArray(toolsData)) {
+                flatTools = toolsData;
+            }
+
+            setAvailableTools(flatTools);
 
             if (settings) {
                 setSystemPrompt(settings.system_prompt);
@@ -77,7 +85,7 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                     setEnabledTools(settings.enabled_tools);
                 } else {
                     // Default: All tools enabled
-                    setEnabledTools(tools || []);
+                    setEnabledTools(flatTools);
                 }
 
                 // Load Context Settings

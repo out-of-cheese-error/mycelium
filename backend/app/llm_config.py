@@ -59,6 +59,7 @@ class LLMConfig:
     def save(self):
         with open(CONFIG_FILE, 'w') as f:
             json.dump(self.config.model_dump(), f, indent=2)
+        print(f"DEBUG: Config saved to {os.path.abspath(CONFIG_FILE)}")
 
     def get_config(self) -> LLMConfigModel:
         return self.config

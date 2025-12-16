@@ -110,9 +110,16 @@ def get_config_path(workspace_id: str):
 
 @router.get("/available_tools")
 async def get_available_tools():
-    """Returns a list of all available tool names."""
+    """Returns a list of all available tool names, categorized."""
     from app.agent import tools
-    return [t.name for t in tools]
+    from app.services.mcp_service import mcp_service
+    
+    mcp_tools = await mcp_service.get_all_tools()
+    
+    return {
+        "builtin": [t.name for t in tools],
+        "mcp": [t.name for t in mcp_tools]
+    }
 
 @router.get("/{workspace_id}/settings", response_model=WorkspaceSettings)
 async def get_workspace_settings(workspace_id: str):
