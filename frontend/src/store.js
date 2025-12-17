@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import axios from 'axios';
 
-const API_base = 'http://localhost:8000';
+const API_base = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
 export const useStore = create((set, get) => ({
     workspaces: [],

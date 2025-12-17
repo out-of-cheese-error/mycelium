@@ -1,0 +1,17 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/chroma_db:/app/chroma_db  # Persist ChromaDB data
+      - ./backend/logs:/app/logs            # Persist logs if any
+    environment:
+      - ALLOW_ORIGINS=*
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
