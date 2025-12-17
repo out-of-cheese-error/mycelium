@@ -118,14 +118,6 @@ You can add knowledge to your graph in several ways:
 
 ---
 
-## Prerequisites
-
-- **Python 3.10+**
-- **Node.js 18+**
-- **One of the following LLM backends:**
-  - [Ollama](https://ollama.ai/) (local, free)
-  - [LM Studio](https://lmstudio.ai/) (local, free)
-  - [OpenAI API](https://platform.openai.com/) (cloud, paid)
 
 ---
 
@@ -138,7 +130,26 @@ git clone https://github.com/yourusername/graph-llm.git
 cd graph-llm
 ```
 
-### 2. Backend Setup
+### 2. Choose your Setup Method
+
+#### Option 1: Running with Docker (Recommended)
+
+1. **Prerequisites**: Ensure you have [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed.
+2. **Run the application**:
+   ```bash
+   docker-compose up --build
+   ```
+3. **Access the App**:
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000/docs
+
+#### Option 2: Manual Installation
+
+**Prerequisites:**
+- Python 3.10+
+- Node.js 18+
+
+### Backend Setup (Manual)
 
 ```bash
 cd backend
@@ -151,7 +162,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Frontend Setup
+### Frontend Setup (Manual)
 
 Ensure you have Node.js and npm installed:
 
@@ -168,7 +179,7 @@ cd frontend
 npm install
 ```
 
-### 4. Configure LLM Provider
+### Configure LLM Provider (Manual)
 
 Copy the example config and customize it:
 
@@ -243,20 +254,6 @@ ollama pull nomic-embed-text
 
 ---
 
-## Running with Docker
-
-The easiest way to run MyCelium is using Docker:
-
-1. **Install Docker Desktop**
-2. **Run the application**:
-   ```bash
-   docker-compose up --build
-   ```
-3. **Access the App**:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000/docs
-   
----
 
 ## Running Locally
 
