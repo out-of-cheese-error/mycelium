@@ -4,8 +4,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/chroma_db:/app/chroma_db  # Persist ChromaDB data
-      - ./backend/logs:/app/logs            # Persist logs if any
+      - ./backend/memory_data:/app/memory_data  # Persist Memory (Graph + Chroma + Notes)
+      - ./backend/logs:/app/logs                # Persist logs
+      - ./backend/llm_config.json:/app/llm_config.json # Config persistence
     environment:
       - ALLOW_ORIGINS=*
 
