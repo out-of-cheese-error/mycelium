@@ -8,6 +8,7 @@ import time
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
+from langchain_core.runnables import RunnableConfig
 from langchain_community.tools import DuckDuckGoSearchRun
 from app.memory_store import GraphMemory
 from app.llm_config import llm_config
@@ -897,7 +898,7 @@ def retrieve_node(state: AgentState):
 
     return {"context": context}
 
-def generate_node(state: AgentState):
+def generate_node(state: AgentState, config: RunnableConfig):
     """Generates a response using the LLM and the retrieved context."""
     context = state["context"]
     messages = state["messages"]
@@ -1059,7 +1060,17 @@ def generate_node(state: AgentState):
     # Clean binding
     if final_tools:
         llm_with_tools = llm.bind_tools(final_tools)
-        response = llm_with_tools.invoke(prompt_messages)
+        # Stream to ensure 'on_chat_model_stream' events are emitted for the UI
+        response = None
+        for chunk in llm_with_tools.stream(prompt_messages, config=config):
+            if response is None:
+                response = chunk
+            else:
+                response += chunk
+        
+        if response is None:
+            from langchain_core.messages import AIMessage
+            response = AIMessage(content="")
         
         # ---------------------------------------------------------
         # ROBUSTNESS FIX: Force inject workspace_id into tool calls
@@ -1089,7 +1100,17 @@ def generate_node(state: AgentState):
                         tc["args"]["workspace_id"] = workspace_id
     else:
         # No tools available
-        response = llm.invoke(prompt_messages)
+        # Stream here as well
+        response = None
+        for chunk in llm.stream(prompt_messages, config=config):
+            if response is None:
+                response = chunk
+            else:
+                response += chunk
+                
+        if response is None:
+            from langchain_core.messages import AIMessage
+            response = AIMessage(content="")
 
     return {"messages": [response]}
 

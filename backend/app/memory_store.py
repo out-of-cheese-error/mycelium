@@ -45,9 +45,17 @@ class GraphMemory:
             try:
                 with open(self.graph_path, 'r') as f:
                     data = json.load(f)
-                    # Ensure links/edges presence to avoid KeyError in strict NetworkX versions
-                    if 'links' not in data and 'edges' not in data:
-                        data['links'] = []
+                    # Normalize 'edges' vs 'links' for NetworkX compatibility
+                    if 'links' not in data:
+                        if 'edges' in data:
+                            data['links'] = data['edges']
+                        else:
+                            data['links'] = []
+                            
+                    # Ensure 'nodes' exists
+                    if 'nodes' not in data:
+                        data['nodes'] = []
+                        
                     self.graph = nx.node_link_graph(data)
             except json.JSONDecodeError as e:
                 print(f"ERROR: Graph file {self.graph_path} is corrupted: {e}")
@@ -58,7 +66,9 @@ class GraphMemory:
                     pass # Best effort
                 self.graph = nx.Graph()
             except Exception as e:
-                print(f"ERROR: Failed to load graph: {e}")
+                print(f"ERROR: Failed to load graph from {self.graph_path}: {e}")
+                import traceback
+                traceback.print_exc()
                 self.graph = nx.Graph()
     
     # ... rest of methods assume self.graph is correct ...
