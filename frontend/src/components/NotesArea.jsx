@@ -5,7 +5,8 @@ import { useStore } from '../store';
 import {
     Save, Edit2, Plus, Trash2, FileText, Bold, Italic, List, ListOrdered,
     Heading1, Heading2, Heading3, Code, Link, Table, Quote, Strikethrough,
-    Minus, CheckSquare, Maximize2, Minimize2, Eye, EyeOff, X, Check, Loader2
+    Minus, CheckSquare, Maximize2, Minimize2, Eye, EyeOff, X, Check, Loader2,
+    Undo2, Redo2
 } from 'lucide-react';
 
 // Toast notification component
@@ -28,8 +29,12 @@ const Toast = ({ message, type, onClose }) => {
 };
 
 // Enhanced toolbar with more options and keyboard shortcut hints
-const MarkdownToolbar = ({ onInsert, disabled }) => {
+const MarkdownToolbar = ({ onInsert, onUndo, onRedo, canUndo, canRedo, disabled }) => {
     const toolbarGroups = [
+        [
+            { type: 'undo', icon: <Undo2 size={16} />, title: 'Undo', shortcut: '⌘Z', action: onUndo, disabled: !canUndo },
+            { type: 'redo', icon: <Redo2 size={16} />, title: 'Redo', shortcut: '⌘⇧Z', action: onRedo, disabled: !canRedo },
+        ],
         [
             { type: 'bold', icon: <Bold size={16} />, title: 'Bold', shortcut: '⌘B' },
             { type: 'italic', icon: <Italic size={16} />, title: 'Italic', shortcut: '⌘I' },
@@ -64,10 +69,10 @@ const MarkdownToolbar = ({ onInsert, disabled }) => {
                     {group.map((item) => (
                         <button
                             key={item.type}
-                            onClick={() => onInsert(item.type)}
-                            disabled={disabled}
+                            onClick={() => item.action ? item.action() : onInsert(item.type)}
+                            disabled={disabled || item.disabled}
                             className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-all 
-                                     duration-150 disabled:opacity-50 disabled:cursor-not-allowed group relative"
+                                     duration-150 disabled:opacity-30 disabled:cursor-not-allowed group relative"
                             title={item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
                         >
                             {item.icon}
@@ -139,6 +144,12 @@ const NotesArea = () => {
     const saveTimeoutRef = useRef(null);
     const lastSavedContent = useRef({ title: '', content: '' });
 
+    // Undo/Redo history
+    const [history, setHistory] = useState([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
+    const isUndoRedoAction = useRef(false);
+    const historyTimeoutRef = useRef(null);
+
     // Initial Fetch
     useEffect(() => {
         if (currentWorkspace) {
@@ -149,19 +160,54 @@ const NotesArea = () => {
     // Update local state when active note changes
     useEffect(() => {
         if (activeNote) {
-            setEditContent(activeNote.content || "");
+            const initialContent = activeNote.content || "";
+            setEditContent(initialContent);
             setEditTitle(activeNote.title || "Untitled");
             lastSavedContent.current = {
                 title: activeNote.title || "Untitled",
-                content: activeNote.content || ""
+                content: initialContent
             };
             setSaveStatus('saved');
+            // Reset history for new note
+            setHistory([initialContent]);
+            setHistoryIndex(0);
         } else {
             setEditContent("");
             setEditTitle("");
             setSaveStatus('saved');
+            setHistory([]);
+            setHistoryIndex(-1);
         }
     }, [activeNote]);
+
+    // Add to history when content changes (debounced)
+    useEffect(() => {
+        if (isUndoRedoAction.current) {
+            isUndoRedoAction.current = false;
+            return;
+        }
+
+        if (historyTimeoutRef.current) {
+            clearTimeout(historyTimeoutRef.current);
+        }
+
+        historyTimeoutRef.current = setTimeout(() => {
+            if (editContent !== history[historyIndex]) {
+                // Truncate any redo history and add new state
+                const newHistory = [...history.slice(0, historyIndex + 1), editContent];
+                // Keep max 100 history entries
+                if (newHistory.length > 100) newHistory.shift();
+                setHistory(newHistory);
+                setHistoryIndex(newHistory.length - 1);
+            }
+        }, 500);
+
+        return () => {
+            if (historyTimeoutRef.current) {
+                clearTimeout(historyTimeoutRef.current);
+            }
+        };
+    }, [editContent]);
 
     // Warn about unsaved changes before leaving
     useEffect(() => {
@@ -260,6 +306,28 @@ const NotesArea = () => {
         setToast({ message: 'Note deleted', type: 'success' });
     };
 
+    // Undo/Redo handlers
+    const handleUndo = useCallback(() => {
+        if (historyIndex > 0) {
+            isUndoRedoAction.current = true;
+            const newIndex = historyIndex - 1;
+            setHistoryIndex(newIndex);
+            setEditContent(history[newIndex]);
+        }
+    }, [history, historyIndex]);
+
+    const handleRedo = useCallback(() => {
+        if (historyIndex < history.length - 1) {
+            isUndoRedoAction.current = true;
+            const newIndex = historyIndex + 1;
+            setHistoryIndex(newIndex);
+            setEditContent(history[newIndex]);
+        }
+    }, [history, historyIndex]);
+
+    const canUndo = historyIndex > 0;
+    const canRedo = historyIndex < history.length - 1;
+
     // Keyboard shortcuts handler
     const handleKeyDown = (e) => {
         const isMod = e.metaKey || e.ctrlKey;
@@ -267,6 +335,13 @@ const NotesArea = () => {
         if (isMod && e.key === 's') {
             e.preventDefault();
             handleSave();
+        } else if (isMod && e.key === 'z') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                handleRedo();
+            } else {
+                handleUndo();
+            }
         } else if (isMod && e.key === 'b') {
             e.preventDefault();
             insertText('bold');
