@@ -833,5 +833,165 @@ export const useStore = create((set, get) => ({
         } catch (e) {
             console.error("Stop ingest failed", e);
         }
+    },
+
+    // --- Graph Chat State ---
+    graphChatMessages: [],
+    graphChatFocusedNode: null,  // { id, type, description } of selected node
+    highlightedNodes: [],  // Array of node IDs to highlight
+    highlightedEdges: [],  // Array of { source, target } edges to highlight
+    graphChatLoading: false,
+    graphChatOpen: false,
+    graphChatSettings: {
+        k: 5,      // Number of nodes to retrieve
+        depth: 2   // Traversal depth
+    },
+
+    setGraphChatOpen: (open) => set({ graphChatOpen: open }),
+
+    setGraphChatFocusedNode: (node) => {
+        set({ graphChatFocusedNode: node });
+    },
+
+    setGraphChatSettings: (settings) => {
+        set(state => ({
+            graphChatSettings: { ...state.graphChatSettings, ...settings }
+        }));
+    },
+
+    clearGraphHighlights: () => {
+        set({ highlightedNodes: [], highlightedEdges: [] });
+    },
+
+    clearGraphChat: () => {
+        set({
+            graphChatMessages: [],
+            graphChatFocusedNode: null,
+            highlightedNodes: [],
+            highlightedEdges: []
+        });
+    },
+
+    // Transfer graph chat messages to main chat and switch to chat view
+    carryToMainChat: async () => {
+        const graphMessages = get().graphChatMessages;
+        const currentThread = get().currentThread;
+        const ws = get().currentWorkspace;
+
+        if (!ws || !currentThread || graphMessages.length === 0) return;
+
+        // Format graph chat history as context for main chat
+        const contextSummary = graphMessages
+            .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+            .join('\n\n');
+
+        const continuationMessage = `Continue this graph exploration conversation:\n\n---\n${contextSummary}\n---\n\nPlease continue helping me explore this topic.`;
+
+        // Clear graph chat
+        set({
+            graphChatMessages: [],
+            graphChatFocusedNode: null,
+            highlightedNodes: [],
+            highlightedEdges: [],
+            graphChatOpen: false,
+            activeView: 'chat'
+        });
+
+        // Send to main chat
+        get().sendMessage(continuationMessage);
+    },
+
+    sendGraphChatMessage: async (message) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+
+        const focusedNode = get().graphChatFocusedNode;
+        const settings = get().graphChatSettings;
+
+        // Add user message
+        set(state => ({
+            graphChatMessages: [...state.graphChatMessages, { role: 'user', content: message }],
+            graphChatLoading: true
+        }));
+
+        // Add placeholder for AI response
+        set(state => ({
+            graphChatMessages: [...state.graphChatMessages, { role: 'assistant', content: '' }]
+        }));
+
+        let aiContent = "";
+
+        try {
+            const response = await fetch(`${API_base}/graph/${ws.id}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: message,
+                    focused_node_id: focusedNode?.id || null,
+                    k: settings.k,
+                    depth: settings.depth
+                })
+            });
+
+            if (!response.body) {
+                throw new Error("No response body");
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                aiContent += chunk;
+
+                // Update UI incrementally (but don't show metadata marker)
+                const displayContent = aiContent.split('###GRAPH_CONTEXT###')[0];
+                set(state => {
+                    const msgs = [...state.graphChatMessages];
+                    const lastMsg = msgs[msgs.length - 1];
+                    if (lastMsg.role === 'assistant') {
+                        lastMsg.content = displayContent;
+                    }
+                    return { graphChatMessages: msgs };
+                });
+            }
+
+            // Parse metadata from the end of the response
+            if (aiContent.includes('###GRAPH_CONTEXT###')) {
+                const parts = aiContent.split('###GRAPH_CONTEXT###');
+                const textContent = parts[0].trim();
+                const metadataStr = parts[1];
+
+                try {
+                    const metadata = JSON.parse(metadataStr);
+                    set({
+                        highlightedNodes: metadata.retrieved_nodes || [],
+                        highlightedEdges: metadata.retrieved_edges || []
+                    });
+                } catch (e) {
+                    console.error("Failed to parse graph context metadata", e);
+                }
+
+                // Update final message content without metadata
+                set(state => {
+                    const msgs = [...state.graphChatMessages];
+                    const lastMsg = msgs[msgs.length - 1];
+                    if (lastMsg.role === 'assistant') {
+                        lastMsg.content = textContent;
+                    }
+                    return { graphChatMessages: msgs };
+                });
+            }
+
+        } catch (e) {
+            console.error("Graph chat error", e);
+            set(state => ({
+                graphChatMessages: [...state.graphChatMessages, { role: 'system', content: `Error: ${e.message}` }]
+            }));
+        } finally {
+            set({ graphChatLoading: false });
+        }
     }
 }));
