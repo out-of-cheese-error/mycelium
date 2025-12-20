@@ -19,6 +19,15 @@ export const useStore = create((set, get) => ({
     activeView: 'chat',
     chatInput: '',
 
+    // UI Settings (theme, font, etc.)
+    uiSettings: {
+        theme: 'dark',
+        accent_color: '#8b5cf6',
+        font_family: 'Inter',
+        font_size: 'md',
+    },
+    setUiSettings: (settings) => set({ uiSettings: settings }),
+
     setActiveView: (view) => set({ activeView: view }),
     setChatInput: (input) => set({ chatInput: input }),
 
@@ -606,7 +615,19 @@ export const useStore = create((set, get) => ({
     fetchSystemConfig: async () => {
         try {
             const res = await axios.get(`${API_base}/system/config`);
-            return res.data;
+            const data = res.data;
+            // Update UI settings in store when config is loaded
+            if (data) {
+                set({
+                    uiSettings: {
+                        theme: data.theme || 'dark',
+                        accent_color: data.accent_color || '#8b5cf6',
+                        font_family: data.font_family || 'Inter',
+                        font_size: data.font_size || 'md',
+                    }
+                });
+            }
+            return data;
         } catch (e) {
             console.error("Fetch system config failed", e);
             return null;
