@@ -830,6 +830,59 @@ async def ingest_arxiv_paper(arxiv_id: str, workspace_id: str = "default"):
     
     return f"Started ingesting arXiv paper '{title}' (Job ID: {job_id}). Use the dashboard to track progress."
 
+# --- Workspace-as-Tool ---
+@tool
+def consult_workspace(workspace_name: str, query: str):
+    """
+    Consults an expert workspace to get specialized knowledge.
+    Use this to query another workspace that has been exposed as a tool.
+    Pass the workspace name (without 'ask_' prefix) and your question.
+    Returns relevant knowledge from that workspace's memory graph.
+    """
+    from app.services.workspace_tool_service import consult_workspace as _consult, get_exposed_workspace_tools
+    
+    # Get list of exposed tools to find the workspace_id
+    exposed = get_exposed_workspace_tools()
+    
+    # Find matching workspace (workspace_name could be tool_name without prefix or workspace_id)
+    target_workspace_id = None
+    for tool_info in exposed:
+        # Match by tool_name (without ask_ prefix) or by workspace_id
+        tool_name_without_prefix = tool_info['tool_name'].replace('ask_', '')
+        if workspace_name.lower() == tool_name_without_prefix.lower():
+            target_workspace_id = tool_info['workspace_id']
+            break
+        if workspace_name.lower() == tool_info['workspace_id'].lower():
+            target_workspace_id = tool_info['workspace_id']
+            break
+    
+    if not target_workspace_id:
+        exposed_names = [t['tool_name'] for t in exposed]
+        if not exposed_names:
+            return "No workspaces are currently exposed as tools. Ask your administrator to enable workspace tools."
+        return f"Workspace '{workspace_name}' not found. Available expert workspaces: {', '.join(exposed_names)}"
+    
+    result = _consult(target_workspace_id, query)
+    return f"## Knowledge from '{target_workspace_id}':\n\n{result}"
+
+@tool
+def list_expert_workspaces():
+    """
+    Lists all available expert workspaces that can be consulted.
+    Use this to discover what specialized knowledge bases are available.
+    """
+    from app.services.workspace_tool_service import get_exposed_workspace_tools
+    
+    exposed = get_exposed_workspace_tools()
+    if not exposed:
+        return "No expert workspaces are currently available."
+    
+    output = ["Available Expert Workspaces:"]
+    for tool_info in exposed:
+        output.append(f"- **{tool_info['tool_name']}**: {tool_info['tool_description']}")
+    
+    return "\n".join(output)
+
 
 tools = [
     DuckDuckGoSearchRun(), create_note, read_note, update_note, list_notes, delete_note, search_notes, 
@@ -841,7 +894,8 @@ tools = [
     search_wikipedia, ingest_wikipedia_page,
     check_ingestion_status, ingest_web_page,
     search_biorxiv, read_biorxiv_abstract,
-    search_arxiv, read_arxiv_abstract, ingest_arxiv_paper
+    search_arxiv, read_arxiv_abstract, ingest_arxiv_paper,
+    consult_workspace, list_expert_workspaces
 ]
 
 
