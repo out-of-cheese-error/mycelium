@@ -316,6 +316,98 @@ class GraphMemory:
 
         return "\n".join(context_lines)
 
+    def retrieve_context_with_nodes(self, query: str, k: int = 3, depth: int = 1, 
+                                     include_descriptions: bool = False, 
+                                     focused_node: str = None) -> dict:
+        """
+        Retrieves relevant subgraph context and returns both context text AND node/edge metadata.
+        Used by graph chat to highlight retrieved nodes on the visualization.
+        
+        Returns:
+            dict with keys:
+                - context: str (text context for LLM)
+                - retrieved_nodes: list[str] (all visited node IDs)
+                - retrieved_edges: list[dict] (all traversed edges as {source, target, relation})
+        """
+        retrieved_nodes = []
+        retrieved_edges = []
+        
+        # If a focused node is provided, use it as a starting point
+        if focused_node and self.graph.has_node(focused_node):
+            starting_nodes = [focused_node]
+        else:
+            # Vector similarity search
+            query_embedding = self.embedding_fn.embed_query(query)
+            results = self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=k
+            )
+            
+            if not results['ids'][0]:
+                print("DEBUG: No relevant embeddings found.")
+                return {"context": "", "retrieved_nodes": [], "retrieved_edges": []}
+            
+            starting_nodes = [eid for eid in results['ids'][0] if self.graph.has_node(eid)]
+        
+        if not starting_nodes:
+            return {"context": "", "retrieved_nodes": [], "retrieved_edges": []}
+            
+        print(f"DEBUG: Starting graph traversal from {len(starting_nodes)} nodes. Depth: {depth}")
+        
+        # BFS Traversal
+        visited = set()
+        queue = []
+        
+        # Initialize queue with found entities (Depth 0)
+        for entity_id in starting_nodes:
+            queue.append((entity_id, 0))
+            visited.add(entity_id)
+
+        context_lines = []
+        
+        # Process Queue
+        while queue:
+            current_id, current_dist = queue.pop(0)
+            
+            # Track this node
+            retrieved_nodes.append(current_id)
+            
+            # 1. Expand current node
+            node_data = self.graph.nodes[current_id]
+            desc = f" - {node_data.get('description')}" if (current_dist == 0 or include_descriptions) else ""
+            context_lines.append(f"Entity (Depth {current_dist}): {current_id} ({node_data.get('type')}){desc}")
+            
+            # Stop if we reached max depth
+            if current_dist >= depth:
+                continue
+            
+            # 2. Get Neighbors
+            neighbors = list(self.graph.neighbors(current_id))
+            for neighbor in neighbors:
+                edge_data = self.graph.get_edge_data(current_id, neighbor)
+                relation = edge_data.get('relation', 'related')
+                
+                # Track this edge
+                retrieved_edges.append({
+                    "source": current_id,
+                    "target": neighbor,
+                    "relation": relation
+                })
+                
+                # Add relationship context
+                context_lines.append(f"  - Related to {neighbor} via '{relation}'")
+                
+                # Add to queue if not visited
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, current_dist + 1))
+
+        return {
+            "context": "\n".join(context_lines),
+            "retrieved_nodes": retrieved_nodes,
+            "retrieved_edges": retrieved_edges
+        }
+
     def get_graph_data(self):
         """Returns graph data in a format suitable for visualization."""
         return nx.node_link_data(self.graph)

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import ReactMarkdown from 'react-markdown';
 import { Send, Cpu, Share2, MessageSquare, Network, Notebook, BookOpen, Layers, Flame, Route, BrainCircuit, RefreshCw } from 'lucide-react';
@@ -11,11 +11,63 @@ import ConceptsArea from './components/ConceptsArea';
 import HotTopicsArea from './components/HotTopicsArea';
 import ConnectorsArea from './components/ConnectorsArea';
 import GrowArea from './components/GrowArea';
+import GraphChat from './components/GraphChat';
 
 function App() {
     const { graphData, currentWorkspace, currentThread, activeView, setActiveView } = useStore();
     const hasActiveJobs = useStore(state => state.ingestJobs && state.ingestJobs.length > 0);
     const [selectedNode, setSelectedNode] = useState(null);
+
+    // Graph chat highlighting
+    const highlightedNodes = useStore(state => state.highlightedNodes);
+    const highlightedEdges = useStore(state => state.highlightedEdges);
+    const setGraphChatFocusedNode = useStore(state => state.setGraphChatFocusedNode);
+    const setGraphChatOpen = useStore(state => state.setGraphChatOpen);
+
+    // Create a Set for fast lookup of highlighted nodes
+    const highlightedNodeSet = useMemo(() => new Set(highlightedNodes), [highlightedNodes]);
+
+    // Helper to check if an edge is highlighted
+    const isEdgeHighlighted = useCallback((link) => {
+        return highlightedEdges.some(e =>
+            (e.source === link.source?.id && e.target === link.target?.id) ||
+            (e.source === link.target?.id && e.target === link.source?.id) ||
+            (e.source === link.source && e.target === link.target) ||
+            (e.source === link.target && e.target === link.source)
+        );
+    }, [highlightedEdges]);
+
+    // Node color function with highlighting
+    const getNodeColor = useCallback((node) => {
+        if (highlightedNodeSet.has(node.id)) {
+            return '#22c55e'; // Green for highlighted nodes
+        }
+        return undefined; // Let auto-color handle it
+    }, [highlightedNodeSet]);
+
+    // Link color function with highlighting
+    const getLinkColor = useCallback((link) => {
+        if (isEdgeHighlighted(link)) {
+            return '#22c55e'; // Green for highlighted edges
+        }
+        return '#4b5563'; // Default gray
+    }, [isEdgeHighlighted]);
+
+    // Link width function with highlighting
+    const getLinkWidth = useCallback((link) => {
+        return isEdgeHighlighted(link) ? 3 : 1;
+    }, [isEdgeHighlighted]);
+
+    // Handle node click - show details and set as focused for graph chat
+    const handleNodeClick = useCallback((node) => {
+        setSelectedNode(node);
+        setGraphChatFocusedNode({
+            id: node.id,
+            type: node.type || 'Unknown',
+            description: node.description || ''
+        });
+        setGraphChatOpen(true);
+    }, [setGraphChatFocusedNode, setGraphChatOpen]);
 
     // Global Ingest Polling
     useEffect(() => {
@@ -157,15 +209,20 @@ function App() {
                                         nodeLabel="id"
                                         linkLabel="relation"
                                         nodeAutoColorBy="type"
+                                        nodeColor={getNodeColor}
                                         nodeRelSize={6}
-                                        linkColor={() => '#4b5563'}
+                                        linkColor={getLinkColor}
+                                        linkWidth={getLinkWidth}
                                         backgroundColor="#000000"
                                         showNavInfo={false}
-                                        width={window.innerWidth - 256} // Approximate width minus sidebar
-                                        onNodeClick={node => setSelectedNode(node)}
+                                        width={window.innerWidth - 256}
+                                        onNodeClick={handleNodeClick}
+                                        cooldownTicks={100}
+                                        warmupTicks={100}
                                     />
+                                    {/* Node details panel - moved to top-left to not conflict with chat */}
                                     {selectedNode && (
-                                        <div className="absolute bottom-4 right-4 z-20 bg-gray-900/90 backdrop-blur p-4 rounded-xl border border-gray-700 w-80 shadow-2xl animate-fade-in-up">
+                                        <div className="absolute top-32 left-4 z-20 bg-gray-900/90 backdrop-blur p-4 rounded-xl border border-gray-700 w-72 shadow-2xl animate-fade-in-up">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
                                                     <h3 className="font-bold text-white text-lg leading-tight">{selectedNode.id}</h3>
@@ -178,15 +235,20 @@ function App() {
                                                     ✕
                                                 </button>
                                             </div>
-                                            <div className="text-sm text-gray-300 max-h-48 overflow-y-auto">
+                                            <div className="text-sm text-gray-300 max-h-32 overflow-y-auto">
                                                 {selectedNode.description || <span className="italic text-gray-500">No description available.</span>}
                                             </div>
                                         </div>
                                     )}
+                                    {/* Graph Chat Panel */}
+                                    <GraphChat />
                                 </>
                             ) : (
                                 <div className="h-full flex items-center justify-center text-gray-600 text-sm">
-                                    Graph is empty.
+                                    <div className="text-center">
+                                        <p className="mb-2">Graph is empty.</p>
+                                        <GraphChat />
+                                    </div>
                                 </div>
                             )
                         }
