@@ -17,3 +17,4 @@ httpx
 python-multipart
 wikipedia
 pypdf
+arxiv

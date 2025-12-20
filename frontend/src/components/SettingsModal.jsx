@@ -227,7 +227,7 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                                     "Knowledge & Notes": ["create_note", "read_note", "update_note", "list_notes", "delete_note", "search_notes"],
                                     "Graph Operations": ["add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge", "search_graph_nodes", "traverse_graph_node", "search_concepts"],
                                     "Ingestion": ["search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia", "ingest_wikipedia_page", "check_ingestion_status", "get_books_by_subject", "ingest_web_page"],
-                                    "Science / bioRxiv": ["search_biorxiv", "read_biorxiv_abstract"],
+                                    "Science / Research": ["search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper"],
                                     "Social / Reddit": ["search_reddit", "browse_subreddit", "read_reddit_thread", "get_reddit_user"],
                                     "Utility": ["generate_lesson"]
                                 };

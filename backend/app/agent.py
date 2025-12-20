@@ -768,6 +768,68 @@ async def read_biorxiv_abstract(doi: str):
         return "Details not found. Check the DOI."
     return f"Title: {details['title']}\nAuthors: {details['authors']}\nDate: {details['date']}\n\nAbstract:\n{details['abstract']}"
 
+# --- ArXiv Tools ---
+@tool
+def search_arxiv(query: str):
+    """
+    Searches for arXiv preprints matching the query.
+    Returns papers from physics, math, CS, biology, and more.
+    """
+    from app.services.arxiv_service import arxiv_service
+    results = arxiv_service.search_articles(query)
+    if not results:
+        return "No results found."
+    
+    output = []
+    for r in results:
+        output.append(f"- {r['title']} (ID: {r['arxiv_id']}, {r['primary_category']}) - {r['published']}")
+    return "\n".join(output)
+
+@tool
+def read_arxiv_abstract(arxiv_id: str):
+    """
+    Reads the abstract and metadata of an arXiv paper by ID.
+    Example IDs: 2301.07041, 1706.03762
+    """
+    from app.services.arxiv_service import arxiv_service
+    details = arxiv_service.get_article_details(arxiv_id)
+    if not details:
+        return "Paper not found. Check the arXiv ID."
+    return f"Title: {details['title']}\nAuthors: {details['authors']}\nCategories: {', '.join(details['categories'])}\nPublished: {details['published']}\nPDF: {details['pdf_url']}\n\nAbstract:\n{details['abstract']}"
+
+@tool
+async def ingest_arxiv_paper(arxiv_id: str, workspace_id: str = "default"):
+    """
+    Ingests an arXiv paper into the knowledge graph by downloading its PDF.
+    The ingestion runs in the background. Use the dashboard to check progress.
+    Example IDs: 2301.07041, 1706.03762
+    """
+    from app.services.arxiv_service import arxiv_service
+    from app.document_processor import process_file
+    import os
+    import asyncio
+    
+    # Clean ID
+    clean_id = arxiv_id.replace("arxiv:", "").strip()
+    
+    # Create temp directory
+    temp_dir = os.path.join(os.getcwd(), "temp", workspace_id)
+    os.makedirs(temp_dir, exist_ok=True)
+    filename = f"arxiv_{clean_id.replace('.', '_')}.pdf"
+    file_path = os.path.join(temp_dir, filename)
+    
+    try:
+        # Download PDF
+        file_path, title = arxiv_service.download_pdf(clean_id, file_path)
+    except Exception as e:
+        return f"Error downloading paper: {e}"
+    
+    # Trigger ingestion
+    job_id = str(uuid.uuid4())
+    asyncio.create_task(process_file(file_path, workspace_id, chunk_size=6000, job_id=job_id))
+    
+    return f"Started ingesting arXiv paper '{title}' (Job ID: {job_id}). Use the dashboard to track progress."
+
 
 tools = [
     DuckDuckGoSearchRun(), create_note, read_note, update_note, list_notes, delete_note, search_notes, 
@@ -778,8 +840,10 @@ tools = [
     search_gutenberg_books, ingest_gutenberg_book,
     search_wikipedia, ingest_wikipedia_page,
     check_ingestion_status, ingest_web_page,
-    search_biorxiv, read_biorxiv_abstract
+    search_biorxiv, read_biorxiv_abstract,
+    search_arxiv, read_arxiv_abstract, ingest_arxiv_paper
 ]
+
 
 # --- Helper ---
 def get_llm():
@@ -1113,7 +1177,7 @@ def generate_node(state: AgentState, config: RunnableConfig):
                         "add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge", "delete_graph_node", "delete_graph_edge",
                         "search_graph_nodes", "traverse_graph_node", "search_concepts",
                         "ingest_web_page", "ingest_gutenberg_book", "ingest_wikipedia_page", "check_ingestion_status", "generate_lesson",
-                        "ingest_biorxiv_article", "search_reddit", "read_note" 
+                        "ingest_biorxiv_article", "search_reddit", "read_note"
                     ]:
                         print(f"DEBUG: Injecting workspace_id='{workspace_id}' into tool '{tc['name']}'")
                         tc["args"]["workspace_id"] = workspace_id
@@ -1355,7 +1419,7 @@ workflow = StateGraph(AgentState)
 
 workflow.add_node("retrieve", retrieve_node)
 workflow.add_node("generate", generate_node)
-def dynamic_tool_node(state: AgentState):
+async def dynamic_tool_node(state: AgentState, config: RunnableConfig):
     """Executes tool calls with workspace-scoped filtering."""
     workspace_id = state.get("workspace_id", "default")
     
@@ -1377,9 +1441,9 @@ def dynamic_tool_node(state: AgentState):
     else:
         filtered_tools = tools
     
-    # Create ToolNode with filtered tools and invoke
+    # Create ToolNode with filtered tools and invoke asynchronously with config
     tool_executor = ToolNode(filtered_tools)
-    return tool_executor.invoke(state)
+    return await tool_executor.ainvoke(state, config)
 
 workflow.add_node("tools", dynamic_tool_node)
 workflow.add_node("extract", extract_knowledge_node)
