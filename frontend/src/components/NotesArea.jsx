@@ -1,7 +1,38 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useStore } from '../store';
-import { Save, Edit2, Plus, Trash2, FileText, ChevronRight } from 'lucide-react';
+import { Save, Edit2, Plus, Trash2, FileText, Bold, Italic, List, ListOrdered, Heading1, Heading2, Heading3, Code, Link, Table } from 'lucide-react';
+
+const MarkdownToolbar = ({ onInsert }) => {
+    return (
+        <div className="flex items-center gap-1 p-2 bg-gray-800 border-b border-gray-700 overflow-x-auto">
+            <ToolbarButton onClick={() => onInsert('bold')} icon={<Bold size={16} />} title="Bold" />
+            <ToolbarButton onClick={() => onInsert('italic')} icon={<Italic size={16} />} title="Italic" />
+            <div className="w-px h-4 bg-gray-700 mx-1" />
+            <ToolbarButton onClick={() => onInsert('h1')} icon={<Heading1 size={16} />} title="Heading 1" />
+            <ToolbarButton onClick={() => onInsert('h2')} icon={<Heading2 size={16} />} title="Heading 2" />
+            <ToolbarButton onClick={() => onInsert('h3')} icon={<Heading3 size={16} />} title="Heading 3" />
+            <div className="w-px h-4 bg-gray-700 mx-1" />
+            <ToolbarButton onClick={() => onInsert('bullet')} icon={<List size={16} />} title="Bullet List" />
+            <ToolbarButton onClick={() => onInsert('number')} icon={<ListOrdered size={16} />} title="Numbered List" />
+            <div className="w-px h-4 bg-gray-700 mx-1" />
+            <ToolbarButton onClick={() => onInsert('code')} icon={<Code size={16} />} title="Code Block" />
+            <ToolbarButton onClick={() => onInsert('link')} icon={<Link size={16} />} title="Link" />
+            <ToolbarButton onClick={() => onInsert('table')} icon={<Table size={16} />} title="Table" />
+        </div>
+    );
+};
+
+const ToolbarButton = ({ onClick, icon, title }) => (
+    <button
+        onClick={onClick}
+        className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+        title={title}
+    >
+        {icon}
+    </button>
+);
 
 const NotesArea = () => {
     const {
@@ -18,6 +49,7 @@ const NotesArea = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState("");
     const [editTitle, setEditTitle] = useState("");
+    const textareaRef = useRef(null);
 
     // Initial Fetch
     useEffect(() => {
@@ -50,6 +82,70 @@ const NotesArea = () => {
         setIsEditing(true);
     };
 
+    const insertText = (type) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = editContent;
+        const before = text.substring(0, start);
+        const selection = text.substring(start, end);
+        const after = text.substring(end);
+
+        let newText = text;
+        let newCursorPos = end;
+
+        switch (type) {
+            case 'bold':
+                newText = `${before}**${selection || 'bold text'}**${after}`;
+                newCursorPos = selection ? end + 4 : start + 2 + 9; // +2 for **, +9 for 'bold text'
+                break;
+            case 'italic':
+                newText = `${before}*${selection || 'italic text'}*${after}`;
+                newCursorPos = selection ? end + 2 : start + 1 + 11;
+                break;
+            case 'h1':
+                newText = `${before}# ${selection || 'Heading 1'}\n${after}`;
+                break;
+            case 'h2':
+                newText = `${before}## ${selection || 'Heading 2'}\n${after}`;
+                break;
+            case 'h3':
+                newText = `${before}### ${selection || 'Heading 3'}\n${after}`;
+                break;
+            case 'bullet':
+                newText = `${before}- ${selection || 'List item'}\n${after}`;
+                break;
+            case 'number':
+                newText = `${before}1. ${selection || 'List item'}\n${after}`;
+                break;
+            case 'code':
+                newText = `${before}\`\`\`\n${selection || 'code'}\n\`\`\`\n${after}`;
+                break;
+            case 'link':
+                newText = `${before}[${selection || 'link text'}](url)${after}`;
+                break;
+            case 'table':
+                const tableTemplate = `
+| Header 1 | Header 2 |
+| -------- | -------- |
+| Cell 1   | Cell 2   |
+| Cell 3   | Cell 4   |
+`;
+                newText = `${before}${tableTemplate}${after}`;
+                break;
+        }
+
+        setEditContent(newText);
+
+        // Restore focus and cursor (approximate)
+        setTimeout(() => {
+            textarea.focus();
+            // In a real app we'd calculate exact cursor position but this is simple enough
+        }, 0);
+    };
+
     if (!currentWorkspace) return <div className="p-8 text-gray-500">Select a workspace.</div>;
 
     return (
@@ -78,9 +174,12 @@ const NotesArea = () => {
                             </button>
                         </div>
 
+                        {isEditing && <MarkdownToolbar onInsert={insertText} />}
+
                         <div className="flex-1 overflow-auto p-6">
                             {isEditing ? (
                                 <textarea
+                                    ref={textareaRef}
                                     className="w-full h-full bg-gray-800 text-white p-4 rounded-xl border border-gray-700 
                                                focus:outline-none focus:border-blue-500 font-mono text-sm leading-relaxed resize-none"
                                     value={editContent}
@@ -90,6 +189,7 @@ const NotesArea = () => {
                             ) : (
                                 <div className="prose prose-invert max-w-none">
                                     <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
                                         components={{
                                             h1: ({ node, ...props }) => <h1 className="text-3xl font-bold text-blue-400 mb-4 mt-6" {...props} />,
                                             h2: ({ node, ...props }) => <h2 className="text-2xl font-semibold text-blue-300 mb-3 mt-5" {...props} />,
@@ -105,6 +205,12 @@ const NotesArea = () => {
                                                     : <code className="block bg-gray-800 p-4 rounded-lg text-sm font-mono my-4 overflow-x-auto" {...props} />,
                                             a: ({ node, ...props }) => <a className="text-blue-400 hover:underline" {...props} />,
                                             img: ({ node, ...props }) => <img className="rounded-xl max-w-full my-4 shadow-lg border border-gray-700 mx-auto" {...props} />,
+                                            table: ({ node, ...props }) => <div className="overflow-x-auto my-4 rounded-lg border border-gray-700"><table className="min-w-full divide-y divide-gray-700" {...props} /></div>,
+                                            thead: ({ node, ...props }) => <thead className="bg-gray-800" {...props} />,
+                                            tbody: ({ node, ...props }) => <tbody className="divide-y divide-gray-700 bg-gray-900" {...props} />,
+                                            tr: ({ node, ...props }) => <tr className="hover:bg-gray-800/50 transition-colors" {...props} />,
+                                            th: ({ node, ...props }) => <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider" {...props} />,
+                                            td: ({ node, ...props }) => <td className="px-4 py-3 text-sm text-gray-300 whitespace-nowrap" {...props} />,
                                         }}
                                     >
                                         {activeNote.content || "*Empty note*"}
@@ -169,3 +275,4 @@ const NotesArea = () => {
 };
 
 export default NotesArea;
+
