@@ -146,11 +146,7 @@ class EmotionScale(BaseModel):
 
 class EmotionState(BaseModel):
     motive: str = "Help the user"
-    scales: List[EmotionScale] = [
-        EmotionScale(name="Happiness", value=75, frozen=True),
-        EmotionScale(name="Trust", value=75, frozen=True),
-        EmotionScale(name="Anger", value=0)
-    ]
+    scales: List[EmotionScale] = []  # Empty by default - user adds their own
 
 def get_emotion_path(workspace_id: str):
     return os.path.join(MEMORY_BASE_DIR, workspace_id, "emotion.json")
@@ -163,15 +159,20 @@ async def get_workspace_emotions(workspace_id: str):
             with open(path, 'r') as f:
                 data = json.load(f)
                 
-            # Migration logic for old format
-            if 'happiness' in data:
+            # Migration logic for old flat format -> convert to scales array
+            if 'happiness' in data and 'scales' not in data:
+                # Old format detected, migrate dynamically
+                migrated_scales = []
+                for key, value in data.items():
+                    if key == 'motive':
+                        continue
+                    if isinstance(value, (int, float)):
+                        migrated_scales.append(
+                            EmotionScale(name=key.capitalize(), value=int(value), frozen=False)
+                        )
                 return EmotionState(
                     motive=data.get('motive', "Help the user"),
-                    scales=[
-                        EmotionScale(name="Happiness", value=data.get('happiness', 75), frozen=True),
-                        EmotionScale(name="Trust", value=data.get('trust', 75), frozen=True),
-                        EmotionScale(name="Anger", value=data.get('anger', 0))
-                    ]
+                    scales=migrated_scales
                 )
             
             return EmotionState(**data)
@@ -412,9 +413,9 @@ async def generate_persona(workspace_id: str, request: GeneratePersonaRequest):
     {{
         "system_prompt": "A detailed system prompt describing the AI's role, tone, style, and constraints. Used for 'Base System Prompt'.",
         "emotions": {{
-             "happiness": 0-100,
-             "trust": 0-100,
-             "anger": 0-100,
+             "emotion_name_1": 0-100,
+             "emotion_name_2": 0-100,
+             ... (add any relevant emotions for this persona, e.g. happiness, curiosity, anger, melancholy, etc.)
              "motive": "A primary driving goal or motive string."
         }},
         "memories": {{
@@ -429,6 +430,7 @@ async def generate_persona(workspace_id: str, request: GeneratePersonaRequest):
     
     GUIDELINES:
     - Create a rich backstory.
+    - For emotions, include 3-6 relevant emotional dimensions that fit the persona (e.g., curiosity, fear, joy, anger, trust).
     - Generate at least 5-10 initial memory entities (friends, enemies, locations, past events relevant to the persona).
     - The system prompt should be immersive.
     - Output ONLY the JSON.
@@ -459,62 +461,50 @@ async def generate_persona(workspace_id: str, request: GeneratePersonaRequest):
             # 2. Update Emotions (emotion.json)
             emotion_path = get_emotion_path(workspace_id)
             
-            # Load existing to preserve frozen
+            # Load existing to preserve frozen scales
             existing_emotions = EmotionState()
             if os.path.exists(emotion_path):
                 try:
                     with open(emotion_path, 'r') as f:
                         existing_data = json.load(f)
-                        if 'happiness' in existing_data: # Migration on load
-                             existing_emotions = EmotionState(
-                                motive=existing_data.get('motive', ""),
-                                scales=[
-                                    EmotionScale(name="Happiness", value=existing_data.get('happiness', 50)),
-                                    EmotionScale(name="Trust", value=existing_data.get('trust', 50)),
-                                    EmotionScale(name="Anger", value=existing_data.get('anger', 0))
-                                ]
-                            )
-                        else:
+                        # Handle new format
+                        if 'scales' in existing_data:
                             existing_emotions = EmotionState(**existing_data)
+                        # Migration from old flat format
+                        elif 'happiness' in existing_data:
+                            migrated_scales = []
+                            for key, value in existing_data.items():
+                                if key == 'motive':
+                                    continue
+                                if isinstance(value, (int, float)):
+                                    migrated_scales.append(
+                                        EmotionScale(name=key.capitalize(), value=int(value), frozen=False)
+                                    )
+                            existing_emotions = EmotionState(
+                                motive=existing_data.get('motive', ""),
+                                scales=migrated_scales
+                            )
                 except:
                     pass
 
-            # Parse new emotions from LLM (expecting object with keys as names)
+            # Parse new emotions from LLM (expecting object with keys as emotion names -> values)
             new_emotions_dict = data.get("emotions", {})
             new_motive = new_emotions_dict.get("motive", "Help the user")
             
-            # Construct new scales list
-            # We want to keep frozen scales from existing, and update others or add new ones?
-            # Strategy: 
-            # 1. Map existing scales by name.
-            # 2. Iterate new keys (except motive). Update if not frozen.
-            # 3. If standard keys (Happiness etc) are missing in new, keep old?
-            
-            # Actually, the prompt asks for specific structure. Let's update the PROMPT too to be dynamic.
-            # But here, let's assume LLM returns a dict mapping Name -> Value.
-            
+            # Build final scales list
+            # Strategy: Keep frozen scales, update non-frozen if LLM provided value, add new ones from LLM
             final_scales = []
-            existing_map = {s.name: s for s in existing_emotions.scales}
-            
-            # We will use the existing scales as the base Source of Truth for *what* scales exist, 
-            # OR we allow LLM to invent new ones? User said "allow USER to introduce own sliders".
-            # So LLM should probably stick to what exists + maybe standard ones?
-            # Or maybe we just update the ones that match?
-            
-            # For "Generate Persona", it's a reset. So we might redefine the standard set.
-            # But if user made a custom "Curiosity" and froze it, we should keep it.
-            
-            # Let's start with all existing scales
+            existing_map = {s.name.lower(): s for s in existing_emotions.scales}
             processed_names = set()
             
+            # First, process existing scales
             for scale in existing_emotions.scales:
-                processed_names.add(scale.name)
+                processed_names.add(scale.name.lower())
                 if scale.frozen:
+                    # Keep frozen scales as-is
                     final_scales.append(scale)
                 else:
-                    # Update if present in new data
-                    # Check for lower case match too?
-                    # new_emotions_dict keys might be lowercase
+                    # Update with LLM value if provided
                     val = None
                     for k, v in new_emotions_dict.items():
                         if k.lower() == scale.name.lower() and isinstance(v, (int, float)):
@@ -524,31 +514,15 @@ async def generate_persona(workspace_id: str, request: GeneratePersonaRequest):
                     if val is not None:
                         final_scales.append(EmotionScale(name=scale.name, value=val, frozen=False))
                     else:
-                        # Keep old value or reset? Persona generation usually resets. 
-                        # Let's keep old value if not mentioned, or reset to 50?
-                        # Let's keep old to be safe.
-                         final_scales.append(scale)
+                        # Keep existing value
+                        final_scales.append(scale)
 
-            # If it's a fresh generation (no existing), we might want to add defaults if empty?
-            if not final_scales:
-                # Add from new_emotions_dict
-                for k, v in new_emotions_dict.items():
-                    if k == "motive": continue
-                    if isinstance(v, (int, float)):
-                        final_scales.append(EmotionScale(name=k.capitalize(), value=int(v)))
-            
-            # If standard ones are missing in `final_scales` but present in `new_emotions_dict` (and weren't in existing), add them?
-            # (Case: Adding a new standard emotion via prompt)
+            # Add new emotions from LLM that don't exist yet
             for k, v in new_emotions_dict.items():
-                if k == "motive": continue
-                # check if we already processed this name
-                name_found = False
-                for s in final_scales:
-                    if s.name.lower() == k.lower():
-                        name_found = True
-                        break
-                if not name_found and isinstance(v, (int, float)):
-                     final_scales.append(EmotionScale(name=k.capitalize(), value=int(v)))
+                if k.lower() == "motive":
+                    continue
+                if k.lower() not in processed_names and isinstance(v, (int, float)):
+                    final_scales.append(EmotionScale(name=k.capitalize(), value=int(v), frozen=False))
 
             with open(emotion_path, 'w') as f:
                 json.dump({
