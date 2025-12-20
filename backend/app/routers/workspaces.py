@@ -104,6 +104,11 @@ class WorkspaceSettings(BaseModel):
     graph_k: int = 3
     graph_depth: int = 1
     graph_include_descriptions: bool = False
+    
+    # Workspace-as-Tool Settings
+    is_tool_enabled: bool = False
+    tool_name: Optional[str] = None  # e.g., "physics_expert" -> becomes "ask_physics_expert"
+    tool_description: Optional[str] = None
 
 def get_config_path(workspace_id: str):
     return os.path.join(MEMORY_BASE_DIR, workspace_id, "config.json")
@@ -113,6 +118,26 @@ async def get_available_tools():
     """Returns a list of all available tool names."""
     from app.agent import tools
     return [t.name for t in tools]
+
+@router.get("/exposed_tools")
+async def get_exposed_tools():
+    """Returns list of workspaces exposed as tools."""
+    from app.services.workspace_tool_service import get_exposed_workspace_tools
+    return get_exposed_workspace_tools()
+
+@router.post("/{workspace_id}/generate_tool_description")
+async def generate_tool_description_endpoint(workspace_id: str):
+    """Generates a tool description based on workspace concepts using LLM."""
+    path = os.path.join(MEMORY_BASE_DIR, workspace_id)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    
+    from app.services.workspace_tool_service import generate_tool_description
+    try:
+        description = await generate_tool_description(workspace_id)
+        return {"description": description}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate description: {str(e)}")
 
 @router.get("/{workspace_id}/settings", response_model=WorkspaceSettings)
 async def get_workspace_settings(workspace_id: str):

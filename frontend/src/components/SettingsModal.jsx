@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store';
-import { X, Save, Sparkles, BrainCircuit, RefreshCw, Upload, Download } from 'lucide-react';
+import { X, Save, Sparkles, BrainCircuit, RefreshCw, Upload, Download, Globe, Wand2 } from 'lucide-react';
 
 const SettingsModal = ({ workspaceId, onClose }) => {
     const { fetchWorkspaceSettings, updateWorkspaceSettings, generatePersona, grow, fetchAvailableTools, exportGraph, importGraph, renameWorkspace } = useStore();
@@ -32,6 +32,12 @@ const SettingsModal = ({ workspaceId, onClose }) => {
     // Rename State
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameValue, setRenameValue] = useState(workspaceId);
+
+    // Workspace-as-Tool State
+    const [isToolEnabled, setIsToolEnabled] = useState(false);
+    const [toolName, setToolName] = useState('');
+    const [toolDescription, setToolDescription] = useState('');
+    const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
 
     const handleRename = async () => {
         if (!renameValue.trim() || renameValue === workspaceId) {
@@ -85,6 +91,11 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                 setGraphK(settings.graph_k !== undefined ? settings.graph_k : 3);
                 setGraphDepth(settings.graph_depth !== undefined ? settings.graph_depth : 1);
                 setGraphIncludeDesc(settings.graph_include_descriptions !== undefined ? settings.graph_include_descriptions : false);
+
+                // Load Workspace-as-Tool Settings
+                setIsToolEnabled(settings.is_tool_enabled || false);
+                setToolName(settings.tool_name || '');
+                setToolDescription(settings.tool_description || '');
             }
             setIsLoading(false);
         };
@@ -103,7 +114,12 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                 chat_message_limit: parseInt(chatMessageLimit),
                 graph_k: parseInt(graphK),
                 graph_depth: parseInt(graphDepth),
-                graph_include_descriptions: graphIncludeDesc
+                graph_include_descriptions: graphIncludeDesc,
+
+                // Workspace-as-Tool Settings
+                is_tool_enabled: isToolEnabled,
+                tool_name: toolName.trim().toLowerCase().replace(/\s+/g, '_'),
+                tool_description: toolDescription
             });
             onClose();
         } catch (e) {
@@ -216,6 +232,76 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                         </div>
                     </div>
 
+                    {/* WORKSPACE AS TOOL SETTINGS */}
+                    <div className="pt-4 border-t border-gray-800">
+                        <label className="block text-sm font-bold text-cyan-400 mb-2 flex items-center gap-2">
+                            <Globe size={16} />
+                            Expose as Expert Tool
+                        </label>
+                        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700 space-y-4">
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="checkbox"
+                                    id="wsToolEnabled"
+                                    checked={isToolEnabled}
+                                    onChange={e => setIsToolEnabled(e.target.checked)}
+                                    className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-cyan-500 focus:ring-cyan-500"
+                                />
+                                <label htmlFor="wsToolEnabled" className="text-sm text-gray-300 cursor-pointer">
+                                    Allow other workspaces to consult this workspace's knowledge
+                                </label>
+                            </div>
+
+                            {isToolEnabled && (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tool Name</label>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-gray-500 text-sm">ask_</span>
+                                            <input
+                                                type="text"
+                                                className="flex-1 bg-black border border-gray-600 rounded px-2 py-1 text-sm text-gray-300 focus:border-cyan-500 focus:outline-none"
+                                                value={toolName}
+                                                onChange={e => setToolName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'))}
+                                                placeholder="physics_expert"
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-gray-500 mt-1">Other workspaces will use "ask_{toolName || 'your_name'}" to consult this workspace.</p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
+                                        <textarea
+                                            className="w-full h-20 bg-black border border-gray-600 rounded p-2 text-sm text-gray-300 focus:border-cyan-500 focus:outline-none resize-none"
+                                            value={toolDescription}
+                                            onChange={e => setToolDescription(e.target.value)}
+                                            placeholder="Consult this expert for questions about..."
+                                        />
+                                        <button
+                                            onClick={async () => {
+                                                setIsGeneratingDesc(true);
+                                                try {
+                                                    const { generateToolDescription } = useStore.getState();
+                                                    const desc = await generateToolDescription(workspaceId);
+                                                    if (desc) setToolDescription(desc);
+                                                } catch (e) {
+                                                    console.error("Failed to generate description:", e);
+                                                } finally {
+                                                    setIsGeneratingDesc(false);
+                                                }
+                                            }}
+                                            disabled={isGeneratingDesc}
+                                            className="mt-2 flex items-center gap-2 px-3 py-1 bg-cyan-900/50 hover:bg-cyan-900 border border-cyan-700 rounded text-xs text-cyan-200 transition-colors disabled:opacity-50"
+                                        >
+                                            {isGeneratingDesc ? <RefreshCw size={12} className="animate-spin" /> : <Wand2 size={12} />}
+                                            {isGeneratingDesc ? 'Generating...' : 'Auto-Generate from Concepts'}
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
                     <div>
                         <label className="block text-sm font-medium text-gray-400 mb-2">
                             Enabled Tools ({enabledTools.length}/{availableTools.length})
@@ -226,6 +312,7 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                                     "Search & Web": ["duckduckgo_search", "visit_page", "search_images", "search_books", "search_authors"],
                                     "Knowledge & Notes": ["create_note", "read_note", "update_note", "list_notes", "delete_note", "search_notes"],
                                     "Graph Operations": ["add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge", "search_graph_nodes", "traverse_graph_node", "search_concepts"],
+                                    "Workspace Cross-Talk": ["consult_workspace", "list_expert_workspaces"],
                                     "Ingestion": ["search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia", "ingest_wikipedia_page", "check_ingestion_status", "get_books_by_subject", "ingest_web_page"],
                                     "Science / Research": ["search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper"],
                                     "Social / Reddit": ["search_reddit", "browse_subreddit", "read_reddit_thread", "get_reddit_user"],

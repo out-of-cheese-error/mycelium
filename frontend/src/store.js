@@ -470,6 +470,16 @@ export const useStore = create((set, get) => ({
         }
     },
 
+    generateToolDescription: async (workspaceId) => {
+        try {
+            const res = await axios.post(`${API_base}/workspaces/${workspaceId}/generate_tool_description`);
+            return res.data.description;
+        } catch (e) {
+            console.error("Generate tool description failed", e);
+            return null;
+        }
+    },
+
     notesList: [],
     activeNote: null, // { id, title, content, updated_at }
 
