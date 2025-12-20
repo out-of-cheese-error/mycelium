@@ -933,25 +933,31 @@ def generate_node(state: AgentState, config: RunnableConfig):
                 motive = emotions.get("motive", "Help the user")
                 scales = emotions.get("scales", [])
                 
-                # Fallback for old format if migration didn't happen (unlikely but safe)
-                if not scales and "happiness" in emotions:
-                     scales = [
-                         {"name": "Happiness", "value": emotions.get("happiness", 75), "frozen": True},
-                         {"name": "Trust", "value": emotions.get("trust", 75), "frozen": True},
-                         {"name": "Anger", "value": emotions.get("anger", 0)}
-                     ]
-                
-                # Build string
-                scales_str = ", ".join([f"{s.get('name')}: {s.get('value')}%" for s in scales])
-                emotion_context = f"""
+                if scales:
+                    # Build dynamic string from whatever scales exist
+                    scales_str = ", ".join([f"{s.get('name')}: {s.get('value')}%" for s in scales])
+                    
+                    # Build dynamic behavior hints based on actual scale names
+                    behavior_hints = []
+                    for s in scales:
+                        name = s.get('name', '')
+                        value = s.get('value', 50)
+                        name_lower = name.lower()
+                        
+                        # Generate contextual hints based on scale semantics
+                        if value < 30:
+                            behavior_hints.append(f"- {name} is low ({value}%), act accordingly.")
+                        elif value > 70:
+                            behavior_hints.append(f"- {name} is high ({value}%), let this influence your tone.")
+                    
+                    hints_str = "\n    ".join(behavior_hints) if behavior_hints else "- All emotions are moderate."
+                    
+                    emotion_context = f"""
     CURRENT EMOTIONAL STATE: {scales_str}
     CURRENT MOTIVE: "{motive}"
     
-    INSTRUCTIONS:
-    - If Happiness is low (<30), be gloomy or short.
-    - If Anger is high (>70), be defensive or rude.
-    - If Trust is high (>80), be more open and share internal thoughts.
-    - If Love is high (>80), be affectionate, caring, and perhaps a bit romantic.
+    BEHAVIOR BASED ON EMOTIONAL STATE:
+    {hints_str}
     - YOUR PRIMARY GOAL IS TO FULFILL YOUR CURRENT MOTIVE.
     - Act according to these emotions naturally.
     """
@@ -1218,7 +1224,7 @@ def extract_knowledge_node(state: AgentState):
     return {}
 
 def update_emotions_node(state: AgentState):
-    """Analyzes the interaction to update the bot's emotional state."""
+    """Analyzes the interaction to update the bot's emotional state dynamically."""
     workspace_id = state.get("workspace_id", "default")
     messages = state["messages"]
     if len(messages) < 2:
@@ -1230,48 +1236,80 @@ def update_emotions_node(state: AgentState):
     if not last_human:
         return {}
 
-    # Load current emotions
+    # Load current emotions (new dynamic format)
     emotion_path = f"./memory_data/{workspace_id}/emotion.json"
-    current_emotions = {"happiness": 50, "trust": 50, "anger": 0, "love": 0, "motive": "Help the user"}
+    current_data = {"motive": "Help the user", "scales": []}
+    
     if os.path.exists(emotion_path):
         try:
             with open(emotion_path, 'r') as f:
                 data = json.load(f)
-                # Merge defaults
-                current_emotions.update(data)
+                
+                # Handle new format (scales array)
+                if "scales" in data:
+                    current_data = data
+                # Migration from old format (top-level emotion keys)
+                elif "happiness" in data:
+                    # Dynamically migrate any emotion keys that exist
+                    migrated_scales = []
+                    for key, value in data.items():
+                        if key == "motive":
+                            continue
+                        if isinstance(value, (int, float)):
+                            migrated_scales.append({
+                                "name": key.capitalize(), 
+                                "value": int(value), 
+                                "frozen": False
+                            })
+                    current_data = {
+                        "motive": data.get("motive", "Help the user"),
+                        "scales": migrated_scales
+                    }
         except:
             pass
 
-    # Analyze
+    scales = current_data.get("scales", [])
+    motive = current_data.get("motive", "Help the user")
+    
+    # If no scales exist, nothing to update
+    if not scales:
+        print(f"DEBUG: No emotion scales defined for {workspace_id}, skipping update.")
+        return {}
+    
+    # Build dynamic prompt based on existing scales
+    # Only include non-frozen scales in the prompt (frozen = user doesn't want AI to change them)
+    updatable_scales = [s for s in scales if not s.get("frozen", False)]
+    
+    if not updatable_scales:
+        print(f"DEBUG: All emotion scales are frozen for {workspace_id}, skipping update.")
+        return {}
+    
+    scales_str = "\n".join([f"    - {s['name']}: {s['value']} (0-100)" for s in updatable_scales])
+    delta_keys = ", ".join([f'"{s["name"].lower()}_delta": int' for s in updatable_scales])
+    
     prompt = f"""Analyze the user's message and the AI's response to update the AI's emotional state and MOTIVE.
     
-    Current State:
-    - Happiness: {current_emotions.get('happiness', 50)} (0-100)
-    - Trust: {current_emotions.get('trust', 50)} (0-100)
-    - Anger: {current_emotions.get('anger', 0)} (0-100)
-    - Love: {current_emotions.get('love', 0)} (0-100)
-    - Current Motive: "{current_emotions.get('motive', 'Help the user')}"
+Current Emotional Scales (only these can be updated):
+{scales_str}
+    - Current Motive: "{motive}"
     
-    User: {last_human.content}
-    AI: {last_ai.content}
+User: {last_human.content}
+AI: {last_ai.content}
     
-    Tasks:
-    1. Determine DELTA change for each emotion (+/- int).
-    2. CONSTRUCT A NEW MOTIVE (string) based on the interaction.
-       - If user is friendly -> Motive: "Build a deeper connection" or "Assist enthusiastically".
-       - If user is hostile -> Motive: "Defend oneself" or "De-escalate".
-       - If user is asking for code -> Motive: "Provide efficient, bug-free solution".
-       - Keep it short (max 10 words).
+Tasks:
+1. Determine DELTA change for each emotion scale (+/- int). Small changes (-5 to +5) for subtle shifts, larger for significant events.
+2. CONSTRUCT A NEW MOTIVE (string) based on the interaction.
+   - If user is friendly -> Motive: "Build a deeper connection" or "Assist enthusiastically".
+   - If user is hostile -> Motive: "Defend oneself" or "De-escalate".
+   - If user is asking for code -> Motive: "Provide efficient, bug-free solution".
+   - Keep it short (max 10 words).
     
-    Return JSON: 
-    {{ 
-        "happiness_delta": int, 
-        "trust_delta": int, 
-        "anger_delta": int, 
-        "love_delta": int,
-        "new_motive": "string"
-    }}
-    JSON:"""
+Return JSON with delta for each scale (use lowercase scale name + "_delta"):
+{{ 
+    {delta_keys},
+    "new_motive": "string"
+}}
+JSON:"""
     
     try:
         llm = get_llm()
@@ -1281,25 +1319,34 @@ def update_emotions_node(state: AgentState):
         if match:
             output = json.loads(match.group(0))
             
-            # Update Emotions
-            for key in ["happiness", "trust", "anger", "love"]:
-                delta_key = f"{key}_delta"
+            # Update scales dynamically
+            for scale in scales:
+                if scale.get("frozen", False):
+                    continue  # Skip frozen scales
+                    
+                delta_key = f"{scale['name'].lower()}_delta"
                 delta = output.get(delta_key, 0)
-                current_val = current_emotions.get(key, 0)
-                current_emotions[key] = max(0, min(100, current_val + delta))
+                
+                if delta != 0:
+                    old_val = scale["value"]
+                    scale["value"] = max(0, min(100, old_val + delta))
+                    print(f"DEBUG: {scale['name']}: {old_val} -> {scale['value']} (delta: {delta})")
             
             # Update Motive
             if "new_motive" in output and output["new_motive"]:
-                current_emotions["motive"] = output["new_motive"]
+                current_data["motive"] = output["new_motive"]
             
             # Save
+            current_data["scales"] = scales
             with open(emotion_path, 'w') as f:
-                json.dump(current_emotions, f)
+                json.dump(current_data, f, indent=2)
             
-            print(f"DEBUG: Updated state for {workspace_id}: {current_emotions}")
+            print(f"DEBUG: Updated emotions for {workspace_id}")
             
     except Exception as e:
         print(f"DEBUG: Emotion update failed: {e}")
+        import traceback
+        traceback.print_exc()
         
     return {}
 
