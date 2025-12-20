@@ -141,8 +141,10 @@ const NotesArea = () => {
     const [focusMode, setFocusMode] = useState(false);
     const [toast, setToast] = useState(null);
     const textareaRef = useRef(null);
+    const previewRef = useRef(null);
     const saveTimeoutRef = useRef(null);
     const lastSavedContent = useRef({ title: '', content: '' });
+    const isScrolling = useRef(false);
 
     // Undo/Redo history
     const [history, setHistory] = useState([]);
@@ -480,7 +482,14 @@ const NotesArea = () => {
                             </div>
 
                             {/* Toolbar */}
-                            <MarkdownToolbar onInsert={insertText} disabled={false} />
+                            <MarkdownToolbar
+                                onInsert={insertText}
+                                onUndo={handleUndo}
+                                onRedo={handleRedo}
+                                canUndo={canUndo}
+                                canRedo={canRedo}
+                                disabled={false}
+                            />
 
                             {/* Editor + Preview Split */}
                             <div className="flex-1 flex overflow-hidden">
@@ -489,10 +498,19 @@ const NotesArea = () => {
                                     <textarea
                                         ref={textareaRef}
                                         className="flex-1 w-full bg-gray-900 text-white p-4 
-                                                 focus:outline-none font-mono text-sm leading-relaxed resize-none"
+                                                 focus:outline-none font-mono text-sm leading-relaxed resize-none overflow-auto"
                                         value={editContent}
                                         onChange={(e) => setEditContent(e.target.value)}
                                         onKeyDown={handleKeyDown}
+                                        onScroll={(e) => {
+                                            if (isScrolling.current || !previewRef.current) return;
+                                            isScrolling.current = true;
+                                            const textarea = e.target;
+                                            const scrollPercentage = textarea.scrollTop / (textarea.scrollHeight - textarea.clientHeight);
+                                            const previewEl = previewRef.current;
+                                            previewEl.scrollTop = scrollPercentage * (previewEl.scrollHeight - previewEl.clientHeight);
+                                            setTimeout(() => { isScrolling.current = false; }, 50);
+                                        }}
                                         placeholder="Start writing in Markdown..."
                                         spellCheck="false"
                                     />
@@ -508,7 +526,19 @@ const NotesArea = () => {
                                         <div className="px-4 py-2 text-xs text-gray-500 border-b border-gray-800 bg-gray-800/50">
                                             PREVIEW
                                         </div>
-                                        <div className="flex-1 overflow-auto p-6">
+                                        <div
+                                            ref={previewRef}
+                                            className="flex-1 overflow-auto p-6"
+                                            onScroll={(e) => {
+                                                if (isScrolling.current || !textareaRef.current) return;
+                                                isScrolling.current = true;
+                                                const previewEl = e.target;
+                                                const scrollPercentage = previewEl.scrollTop / (previewEl.scrollHeight - previewEl.clientHeight);
+                                                const textarea = textareaRef.current;
+                                                textarea.scrollTop = scrollPercentage * (textarea.scrollHeight - textarea.clientHeight);
+                                                setTimeout(() => { isScrolling.current = false; }, 50);
+                                            }}
+                                        >
                                             <div className="prose prose-invert max-w-none">
                                                 <ReactMarkdown
                                                     remarkPlugins={[remarkGfm]}
