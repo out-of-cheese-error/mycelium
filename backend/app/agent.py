@@ -805,8 +805,6 @@ def retrieve_node(state: AgentState):
     include_descriptions = False
     
     try:
-        import os
-        import json
         config_path = os.path.join("memory_data", workspace_id, "config.json")
         if os.path.exists(config_path):
             with open(config_path, 'r') as f:
@@ -912,12 +910,13 @@ def generate_node(state: AgentState, config: RunnableConfig):
     try:
         config_path = f"./memory_data/{workspace_id}/config.json"
         with open(config_path, 'r') as f:
-            config = json.load(f)
-            base_system_prompt = config.get("system_prompt", base_system_prompt)
-            allow_search = config.get("allow_search", True)
-            enabled_tools = config.get("enabled_tools", None)
-    except:
-        pass
+            ws_config = json.load(f)
+            base_system_prompt = ws_config.get("system_prompt", base_system_prompt)
+            allow_search = ws_config.get("allow_search", True)
+            enabled_tools = ws_config.get("enabled_tools", None)
+            print(f"DEBUG [generate_node]: Loaded config for {workspace_id}, enabled_tools={enabled_tools}")
+    except Exception as e:
+        print(f"DEBUG [generate_node]: Failed to load config: {e}")
 
 
     # ... (Emotions and Notes loading omitted for brevity, logic remains same) ...
@@ -983,6 +982,28 @@ def generate_node(state: AgentState, config: RunnableConfig):
     except:
         pass
 
+    # Build dynamic tools section based on enabled_tools
+    if enabled_tools is not None:
+        enabled_set = set(enabled_tools)
+        tool_names = [t.name for t in tools if t.name in enabled_set]
+        print(f"DEBUG [generate_node]: Filtering tools. enabled_set={enabled_set}, tool_names={tool_names}")
+    else:
+        tool_names = [t.name for t in tools]
+        print(f"DEBUG [generate_node]: No tool filtering (enabled_tools is None), all {len(tool_names)} tools available")
+    
+    tools_section = ""
+    if tool_names:
+        tools_section = f"""
+    AVAILABLE TOOLS:
+    You have access to ONLY the following tools: {', '.join(tool_names)}
+    
+    Use these tools as needed to help the user. Do NOT attempt to use any tools not listed above.
+    """
+    else:
+        tools_section = """
+    NOTE: No tools are currently enabled for this workspace. You can only respond with text.
+    """
+
     system_prompt = f"""{base_system_prompt}
     CURRENT WORKSPACE ID: {workspace_id}
 
@@ -993,18 +1014,12 @@ def generate_node(state: AgentState, config: RunnableConfig):
     
     {notes_context}
 
-    RELEVANT TOOLS:
-    - use 'create_note(title, content)' to save important information.
-    - use 'search_web' for external information.
-    - use 'search_images(query)' to find relevant images. 
-      - When finding images, embed them in your response using Markdown: ![Alt Text](URL).
-      - You can also add these images to notes if relevant.
-    - use 'visit_page(url)' to read content from URLs.
+    {tools_section}
     
     If the context is empty, it means you don't recall anything specific about this yet.
     Answer the user's latest message naturally.
     
-    IMPORTANT: When using ANY tool (create_note, add_graph_node, delete_graph_edge, etc.), YOU MUST PASS the 'workspace_id' argument as "{workspace_id}". Do not use the default.
+    IMPORTANT: When using ANY tool, YOU MUST PASS the 'workspace_id' argument as "{workspace_id}" if the tool accepts it. Do not use the default.
     
     GUIDANCE ON CONCEPTS & GRAPH RAG:
     - If the user asks to explore a "Concept" or "Topic", use 'search_concepts' to retrieve the high-level summary and extracted entities.
@@ -1017,8 +1032,6 @@ def generate_node(state: AgentState, config: RunnableConfig):
     # Apply Chat Message Limit (Workspace Scoped)
     limit = 20
     try:
-        import os
-        import json
         config_path = os.path.join("memory_data", workspace_id, "config.json")
         if os.path.exists(config_path):
             with open(config_path, 'r') as f:
@@ -1295,7 +1308,33 @@ workflow = StateGraph(AgentState)
 
 workflow.add_node("retrieve", retrieve_node)
 workflow.add_node("generate", generate_node)
-workflow.add_node("tools", ToolNode(tools))
+def dynamic_tool_node(state: AgentState):
+    """Executes tool calls with workspace-scoped filtering."""
+    workspace_id = state.get("workspace_id", "default")
+    
+    # Load enabled_tools from workspace config
+    enabled_tools = None
+    try:
+        config_path = f"./memory_data/{workspace_id}/config.json"
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                ws_config = json.load(f)
+                enabled_tools = ws_config.get("enabled_tools", None)
+    except Exception as e:
+        print(f"DEBUG: Error loading tools config: {e}")
+    
+    # Filter tools based on enabled_tools
+    if enabled_tools is not None:
+        safe_list = set(enabled_tools)
+        filtered_tools = [t for t in tools if t.name in safe_list]
+    else:
+        filtered_tools = tools
+    
+    # Create ToolNode with filtered tools and invoke
+    tool_executor = ToolNode(filtered_tools)
+    return tool_executor.invoke(state)
+
+workflow.add_node("tools", dynamic_tool_node)
 workflow.add_node("extract", extract_knowledge_node)
 workflow.add_node("update_emotions", update_emotions_node)
 
