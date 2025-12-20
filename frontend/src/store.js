@@ -613,7 +613,32 @@ export const useStore = create((set, get) => ({
         }
     },
 
+    // Knowledge Gaps state and actions
+    knowledgeGaps: [],
+    knowledgeGapsLoading: false,
+
+    fetchKnowledgeGaps: async (limit = 10, maxDegree = 2) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return [];
+
+        set({ knowledgeGapsLoading: true });
+        try {
+            const res = await axios.get(`${API_base}/workspaces/${ws.id}/knowledge_gaps`, {
+                params: { limit, max_degree: maxDegree }
+            });
+            set({ knowledgeGaps: res.data });
+            return res.data;
+        } catch (e) {
+            console.error("Fetch knowledge gaps failed", e);
+            set({ knowledgeGaps: [] });
+            return [];
+        } finally {
+            set({ knowledgeGapsLoading: false });
+        }
+    },
+
     growLogs: {}, // { [workspaceId]: [] }
+
 
     grow: async (n, topic = null, save_to_notes = false, workspaceId = null, depth = 1) => {
         const ws = get().currentWorkspace;

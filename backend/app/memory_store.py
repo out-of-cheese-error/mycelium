@@ -560,3 +560,41 @@ class GraphMemory:
             })
             
         return results
+
+    def get_knowledge_gaps(self, limit: int = 10, max_degree: int = 2, min_nodes: int = 5):
+        """
+        Returns nodes with low connectivity (potential knowledge gaps).
+        These are "orphan" or "stub" entities that could benefit from expansion.
+        
+        :param limit: Number of gaps to return
+        :param max_degree: Maximum degree to consider as a "gap" (nodes with <= this many connections)
+        :param min_nodes: Minimum graph size before analysis makes sense
+        """
+        node_count = self.graph.number_of_nodes()
+        
+        if node_count < min_nodes:
+            return []
+        
+        # Get all nodes with their degrees
+        node_degrees = [(node_id, self.graph.degree[node_id]) for node_id in self.graph.nodes()]
+        
+        # Filter to only low-connectivity nodes
+        low_connectivity = [(node_id, degree) for node_id, degree in node_degrees if degree <= max_degree]
+        
+        # Sort by degree (ascending) - lowest connectivity first
+        low_connectivity.sort(key=lambda x: x[1])
+        
+        # Take top N gaps
+        gaps = low_connectivity[:limit]
+        
+        results = []
+        for node_id, degree in gaps:
+            node_data = self.graph.nodes[node_id]
+            results.append({
+                "id": node_id,
+                "type": node_data.get("type", "Unknown"),
+                "description": node_data.get("description", ""),
+                "degree": degree
+            })
+        
+        return results

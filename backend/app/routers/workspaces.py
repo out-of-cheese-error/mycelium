@@ -577,6 +577,24 @@ async def stop_contemplate_workspace(workspace_id: str, job_id: str):
     stopped = stop_contemplation(job_id)
     return {"status": "stopped" if stopped else "not_found"}
 
+@router.get("/{workspace_id}/knowledge_gaps")
+async def get_knowledge_gaps(
+    workspace_id: str, 
+    limit: int = 10, 
+    max_degree: int = 2
+):
+    """
+    Returns nodes with low connectivity (knowledge gaps).
+    These are topics that could benefit from expansion.
+    """
+    path = os.path.join(MEMORY_BASE_DIR, workspace_id)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    
+    mem = GraphMemory(workspace_id=workspace_id, base_dir=MEMORY_BASE_DIR)
+    return mem.get_knowledge_gaps(limit=limit, max_degree=max_degree)
+
+
 @router.post("/{workspace_id}/scripts/generate")
 async def generate_script(workspace_id: str, request: GenerateScriptRequest):
     try:
