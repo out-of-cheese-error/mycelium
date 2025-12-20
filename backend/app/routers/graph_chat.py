@@ -33,8 +33,8 @@ async def graph_chat(workspace_id: str, request: GraphChatRequest):
     
     # Use request params if provided, else load from workspace config, else defaults
     import os
-    k = request.k if request.k is not None else 5
-    depth = request.depth if request.depth is not None else 2
+    k = request.k if request.k is not None else 3
+    depth = request.depth if request.depth is not None else 1
     include_descriptions = True  # More verbose for graph chat
     
     try:

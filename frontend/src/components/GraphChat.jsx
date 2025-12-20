@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, X, MessageSquare, Minimize2, Maximize2, Trash2, ExternalLink, Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, X, MessageSquare, Minimize2, Maximize2, Trash2, ExternalLink, Settings, Plus } from 'lucide-react';
 import { useStore } from '../store';
 
 const GraphChat = () => {
@@ -18,6 +18,7 @@ const GraphChat = () => {
         clearGraphChat,
         clearGraphHighlights,
         carryToMainChat,
+        carryToNewChat,
         highlightedNodes
     } = useStore();
 
@@ -59,6 +60,10 @@ const GraphChat = () => {
 
     const handleCarryToMain = () => {
         carryToMainChat();
+    };
+
+    const handleCarryToNew = () => {
+        carryToNewChat();
     };
 
     if (!graphChatOpen) {
@@ -117,13 +122,22 @@ const GraphChat = () => {
                 </div>
                 <div className="flex items-center gap-1">
                     {graphChatMessages.length > 0 && (
-                        <button
-                            onClick={handleCarryToMain}
-                            className="text-gray-400 hover:text-green-400 transition-colors p-1"
-                            title="Continue in Main Chat"
-                        >
-                            <ExternalLink size={14} />
-                        </button>
+                        <>
+                            <button
+                                onClick={handleCarryToNew}
+                                className="text-gray-400 hover:text-blue-400 transition-colors p-1"
+                                title="Open as New Chat (preserves messages)"
+                            >
+                                <Plus size={14} />
+                            </button>
+                            <button
+                                onClick={handleCarryToMain}
+                                className="text-gray-400 hover:text-green-400 transition-colors p-1"
+                                title="Continue in Current Chat"
+                            >
+                                <ExternalLink size={14} />
+                            </button>
+                        </>
                     )}
                     <button
                         onClick={() => setShowSettings(!showSettings)}

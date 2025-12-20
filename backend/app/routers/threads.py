@@ -79,6 +79,31 @@ async def create_thread(request: CreateThreadRequest):
         
     return Thread(id=thread_id, workspace_id=request.workspace_id, title=request.title, created_at="")
 
+
+class CreateThreadWithMessagesRequest(BaseModel):
+    workspace_id: str
+    title: Optional[str] = "Graph Chat"
+    messages: List[Dict]  # List of {role: str, content: str}
+
+
+@router.post("/with_messages", response_model=Thread)
+async def create_thread_with_messages(request: CreateThreadWithMessagesRequest):
+    """Creates a new thread with pre-populated messages (for carrying graph chat over)."""
+    thread_id = str(uuid.uuid4())[:8]
+    thread_data = {
+        "id": thread_id,
+        "workspace_id": request.workspace_id,
+        "title": request.title,
+        "created_at": datetime.now().isoformat(),
+        "messages": request.messages
+    }
+    
+    path = get_thread_path(request.workspace_id, thread_id)
+    with open(path, 'w') as f:
+        json.dump(thread_data, f, indent=2)
+        
+    return Thread(id=thread_id, workspace_id=request.workspace_id, title=request.title, created_at=thread_data["created_at"])
+
 @router.delete("/{workspace_id}/{thread_id}")
 async def delete_thread(workspace_id: str, thread_id: str):
     path = get_thread_path(workspace_id, thread_id)

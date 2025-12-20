@@ -222,7 +222,7 @@ function App() {
                                     />
                                     {/* Node details panel - moved to top-left to not conflict with chat */}
                                     {selectedNode && (
-                                        <div className="absolute top-20 left-4 z-20 bg-gray-900/90 backdrop-blur p-4 rounded-xl border border-gray-700 w-72 shadow-2xl animate-fade-in-up">
+                                        <div className="absolute top-32 left-4 z-20 bg-gray-900/90 backdrop-blur p-4 rounded-xl border border-gray-700 w-72 shadow-2xl animate-fade-in-up">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
                                                     <h3 className="font-bold text-white text-lg leading-tight">{selectedNode.id}</h3>

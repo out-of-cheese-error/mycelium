@@ -843,8 +843,8 @@ export const useStore = create((set, get) => ({
     graphChatLoading: false,
     graphChatOpen: false,
     graphChatSettings: {
-        k: 5,      // Number of nodes to retrieve
-        depth: 2   // Traversal depth
+        k: 3,      // Number of nodes to retrieve
+        depth: 1   // Traversal depth
     },
 
     setGraphChatOpen: (open) => set({ graphChatOpen: open }),
@@ -899,6 +899,50 @@ export const useStore = create((set, get) => ({
 
         // Send to main chat
         get().sendMessage(continuationMessage);
+    },
+
+    // Create a NEW thread with the exact graph chat messages as proper bubbles
+    carryToNewChat: async () => {
+        const graphMessages = get().graphChatMessages;
+        const ws = get().currentWorkspace;
+        const focusedNode = get().graphChatFocusedNode;
+
+        if (!ws || graphMessages.length === 0) return;
+
+        try {
+            // Generate a title based on focused node or first message
+            const title = focusedNode
+                ? `Graph: ${focusedNode.id}`
+                : `Graph Chat ${new Date().toLocaleDateString()}`;
+
+            // Create a new thread with the exact messages
+            const res = await axios.post(`${API_base}/threads/with_messages`, {
+                workspace_id: ws.id,
+                title: title,
+                messages: graphMessages.map(m => ({
+                    role: m.role,
+                    content: m.content
+                }))
+            });
+
+            const newThread = res.data;
+
+            // Add to threads list and select it
+            set(state => ({
+                threads: [newThread, ...state.threads],
+                currentThread: newThread,
+                messages: graphMessages, // Set messages directly
+                graphChatMessages: [],
+                graphChatFocusedNode: null,
+                highlightedNodes: [],
+                highlightedEdges: [],
+                graphChatOpen: false,
+                activeView: 'chat'
+            }));
+
+        } catch (e) {
+            console.error("Failed to create new chat from graph chat", e);
+        }
     },
 
     sendGraphChatMessage: async (message) => {
