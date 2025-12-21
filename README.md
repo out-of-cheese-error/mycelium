@@ -202,6 +202,7 @@ Edit `backend/llm_config.json` with your preferred provider:
 ```json
 {
   "provider": "ollama",
+  "embedding_provider": "ollama",
   "ollama_base_url": "http://localhost:11434",
   "ollama_chat_model": "llama3.2",
   "ollama_embedding_model": "nomic-embed-text",
@@ -218,11 +219,18 @@ ollama pull llama3.2
 ollama pull nomic-embed-text
 ```
 
+> ⚠️ **Running with Docker?** When running MyCelium in Docker while Ollama runs on your host machine, use `host.docker.internal` instead of `localhost`:
+> ```json
+> "ollama_base_url": "http://host.docker.internal:11434"
+> ```
+> This is because `localhost` inside Docker refers to the container itself, not your host machine.
+
 ### LM Studio
 
 ```json
 {
   "provider": "lmstudio",
+  "embedding_provider": "lmstudio",
   "chat_base_url": "http://localhost:1234/v1",
   "chat_api_key": "lm-studio",
   "chat_model": "your-model-name",
@@ -234,17 +242,42 @@ ollama pull nomic-embed-text
 }
 ```
 
+> ⚠️ **Running with Docker?** Use `host.docker.internal` instead of `localhost`:
+> ```json
+> "chat_base_url": "http://host.docker.internal:1234/v1",
+> "embedding_base_url": "http://host.docker.internal:1234/v1"
+> ```
+
 ### OpenAI
 
 ```json
 {
   "provider": "openai",
+  "embedding_provider": "openai",
   "chat_base_url": "https://api.openai.com/v1",
   "chat_api_key": "sk-your-api-key",
   "chat_model": "gpt-4o",
   "embedding_base_url": "https://api.openai.com/v1",
   "embedding_api_key": "sk-your-api-key",
   "embedding_model": "text-embedding-3-small",
+  "temperature": 0.7,
+  "tts_enabled": false
+}
+```
+
+### Mixed Providers
+
+You can use different providers for chat (LLM) and embeddings. For example, use OpenAI for chat and Ollama for embeddings:
+
+```json
+{
+  "provider": "openai",
+  "embedding_provider": "ollama",
+  "chat_base_url": "https://api.openai.com/v1",
+  "chat_api_key": "sk-your-api-key",
+  "chat_model": "gpt-4o",
+  "ollama_base_url": "http://host.docker.internal:11434",
+  "ollama_embedding_model": "nomic-embed-text",
   "temperature": 0.7,
   "tts_enabled": false
 }

@@ -6,8 +6,10 @@ import json
 CONFIG_FILE = "llm_config.json"
 
 class LLMConfigModel(BaseModel):
-    # Provider Selection: "openai" (for OpenAI API), "ollama" (for Ollama), "lmstudio" (for LM Studio)
+    # Provider Selection for Chat LLM: "openai" (for OpenAI API), "ollama" (for Ollama), "lmstudio" (for LM Studio)
     provider: Literal["openai", "ollama", "lmstudio"] = "lmstudio"
+    # Provider Selection for Embeddings (independent from LLM provider)
+    embedding_provider: Literal["openai", "ollama", "lmstudio"] = "lmstudio"
     
     # Chat Settings (used for openai/lmstudio providers)
     chat_base_url: str = "http://localhost:1234/v1"
@@ -92,10 +94,10 @@ class LLMConfig:
             )
     
     def get_embeddings(self):
-        """Factory method to get the appropriate Embeddings model based on provider."""
+        """Factory method to get the appropriate Embeddings model based on embedding_provider."""
         cfg = self.config
         
-        if cfg.provider == "ollama":
+        if cfg.embedding_provider == "ollama":
             from langchain_ollama import OllamaEmbeddings
             return OllamaEmbeddings(
                 model=cfg.ollama_embedding_model,

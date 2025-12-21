@@ -52,6 +52,7 @@ const AppSettingsModal = ({ onClose }) => {
 
     const [config, setConfig] = useState({
         provider: 'lmstudio',
+        embedding_provider: 'lmstudio',
         chat_base_url: '',
         chat_api_key: '',
         chat_model: '',
@@ -81,6 +82,7 @@ const AppSettingsModal = ({ onClose }) => {
             if (data) {
                 setConfig({
                     provider: data.provider || 'lmstudio',
+                    embedding_provider: data.embedding_provider || data.provider || 'lmstudio',
                     chat_base_url: data.chat_base_url || '',
                     chat_api_key: data.chat_api_key || '',
                     chat_model: data.chat_model || '',
@@ -334,43 +336,41 @@ const AppSettingsModal = ({ onClose }) => {
                     {/* LLM TAB */}
                     {activeTab === 'llm' && (
                         <div className="space-y-6">
-                            {/* Provider Selection */}
-                            <div>
-                                <label className="block text-sm font-bold mb-2" style={{ color: 'var(--text-muted)' }}>
-                                    LLM Provider
-                                </label>
-                                <select
-                                    className="w-full p-3 rounded-lg border text-sm focus:outline-none focus:ring-2"
-                                    style={{
-                                        backgroundColor: 'var(--bg-primary)',
-                                        borderColor: 'var(--border-color)',
-                                        color: 'var(--text-primary)',
-                                        '--tw-ring-color': 'var(--accent)',
-                                    }}
-                                    value={config.provider || 'lmstudio'}
-                                    onChange={e => setConfig({ ...config, provider: e.target.value })}
-                                >
-                                    <option value="ollama">Ollama (Local)</option>
-                                    <option value="lmstudio">LM Studio (Local)</option>
-                                    <option value="openai">OpenAI (Cloud)</option>
-                                </select>
-                            </div>
+                            {/* Chat LLM Provider Selection */}
+                            <div className="space-y-4 p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                <h4 className="text-sm font-bold" style={{ color: 'var(--accent)' }}>Chat / LLM</h4>
+                                <div>
+                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Provider</label>
+                                    <select
+                                        className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                        style={{
+                                            backgroundColor: 'var(--bg-tertiary)',
+                                            borderColor: 'var(--border-color)',
+                                            color: 'var(--text-primary)',
+                                            '--tw-ring-color': 'var(--accent)',
+                                        }}
+                                        value={config.provider || 'lmstudio'}
+                                        onChange={e => setConfig({ ...config, provider: e.target.value })}
+                                    >
+                                        <option value="ollama">Ollama (Local)</option>
+                                        <option value="lmstudio">LM Studio (Local)</option>
+                                        <option value="openai">OpenAI (Cloud)</option>
+                                    </select>
+                                </div>
 
-                            {/* Ollama Settings */}
-                            {config.provider === 'ollama' && (
-                                <div className="space-y-4 p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
-                                    <h4 className="text-sm font-bold" style={{ color: 'var(--accent)' }}>Ollama Settings</h4>
-                                    <div>
-                                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Base URL</label>
-                                        <input
-                                            className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
-                                            style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
-                                            value={config.ollama_base_url || ''}
-                                            onChange={e => setConfig({ ...config, ollama_base_url: e.target.value })}
-                                            placeholder="http://localhost:11434"
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                {/* Ollama LLM Settings */}
+                                {config.provider === 'ollama' && (
+                                    <>
+                                        <div>
+                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Base URL</label>
+                                            <input
+                                                className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                value={config.ollama_base_url || ''}
+                                                onChange={e => setConfig({ ...config, ollama_base_url: e.target.value })}
+                                                placeholder="http://localhost:11434"
+                                            />
+                                        </div>
                                         <div>
                                             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Chat Model</label>
                                             <input
@@ -381,25 +381,12 @@ const AppSettingsModal = ({ onClose }) => {
                                                 placeholder="llama3.2"
                                             />
                                         </div>
-                                        <div>
-                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Embedding Model</label>
-                                            <input
-                                                className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
-                                                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
-                                                value={config.ollama_embedding_model || ''}
-                                                onChange={e => setConfig({ ...config, ollama_embedding_model: e.target.value })}
-                                                placeholder="nomic-embed-text"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                                    </>
+                                )}
 
-                            {/* OpenAI/LM Studio Settings */}
-                            {config.provider !== 'ollama' && (
-                                <>
-                                    <div className="space-y-4 p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
-                                        <h4 className="text-sm font-bold" style={{ color: 'var(--accent)' }}>Chat Settings</h4>
+                                {/* OpenAI/LM Studio LLM Settings */}
+                                {config.provider !== 'ollama' && (
+                                    <>
                                         <div>
                                             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Base URL</label>
                                             <input
@@ -448,10 +435,62 @@ const AppSettingsModal = ({ onClose }) => {
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    </>
+                                )}
+                            </div>
 
-                                    <div className="space-y-4 p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
-                                        <h4 className="text-sm font-bold" style={{ color: 'var(--accent)' }}>Embedding Settings</h4>
+                            {/* Embedding Provider Selection */}
+                            <div className="space-y-4 p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                <h4 className="text-sm font-bold" style={{ color: 'var(--accent)' }}>Embeddings</h4>
+                                <div>
+                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Provider</label>
+                                    <select
+                                        className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                        style={{
+                                            backgroundColor: 'var(--bg-tertiary)',
+                                            borderColor: 'var(--border-color)',
+                                            color: 'var(--text-primary)',
+                                            '--tw-ring-color': 'var(--accent)',
+                                        }}
+                                        value={config.embedding_provider || 'lmstudio'}
+                                        onChange={e => setConfig({ ...config, embedding_provider: e.target.value })}
+                                    >
+                                        <option value="ollama">Ollama (Local)</option>
+                                        <option value="lmstudio">LM Studio (Local)</option>
+                                        <option value="openai">OpenAI (Cloud)</option>
+                                    </select>
+                                </div>
+
+                                {/* Ollama Embedding Settings */}
+                                {config.embedding_provider === 'ollama' && (
+                                    <>
+                                        <div>
+                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Base URL</label>
+                                            <input
+                                                className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                value={config.ollama_base_url || ''}
+                                                onChange={e => setConfig({ ...config, ollama_base_url: e.target.value })}
+                                                placeholder="http://localhost:11434"
+                                            />
+                                            <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>Shared with LLM if using Ollama for both</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Embedding Model</label>
+                                            <input
+                                                className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                value={config.ollama_embedding_model || ''}
+                                                onChange={e => setConfig({ ...config, ollama_embedding_model: e.target.value })}
+                                                placeholder="nomic-embed-text"
+                                            />
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* OpenAI/LM Studio Embedding Settings */}
+                                {config.embedding_provider !== 'ollama' && (
+                                    <>
                                         <div>
                                             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Base URL</label>
                                             <input
@@ -483,9 +522,9 @@ const AppSettingsModal = ({ onClose }) => {
                                                 />
                                             </div>
                                         </div>
-                                    </div>
-                                </>
-                            )}
+                                    </>
+                                )}
+                            </div>
 
                             {/* Temperature */}
                             <div>
