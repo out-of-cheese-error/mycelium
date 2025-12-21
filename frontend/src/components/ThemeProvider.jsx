@@ -116,12 +116,15 @@ function adjustColor(hex, amount) {
 
 export const ThemeProvider = ({ children }) => {
     const uiSettings = useStore(state => state.uiSettings);
+    const themeLoaded = useStore(state => state.themeLoaded);
 
     useEffect(() => {
-        if (uiSettings) {
+        // Only apply theme changes AFTER initial load is complete
+        // App.jsx handles the initial theme application from fetchSystemConfig
+        if (themeLoaded && uiSettings) {
             applyThemeToDOM(uiSettings);
         }
-    }, [uiSettings]);
+    }, [uiSettings, themeLoaded]);
 
     return (
         <ThemeContext.Provider value={uiSettings}>

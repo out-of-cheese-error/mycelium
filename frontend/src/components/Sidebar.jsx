@@ -263,13 +263,10 @@ const Sidebar = () => {
 
             </div>
 
-            {/* STATUS & EMOTIONS */}
-            {currentWorkspace && (
-                <div className="p-4 border-t border-gray-800 bg-black/20 space-y-3">
-                    {emotions && <EmotionsPanel />}
-                    <div className="text-xs text-gray-500 font-mono pt-2 border-t border-gray-800">
-                        WS: {currentWorkspace.id}
-                    </div>
+            {/* EMOTIONS */}
+            {currentWorkspace && emotions && (
+                <div className="p-4 border-t border-gray-800 bg-black/20">
+                    <EmotionsPanel />
                 </div>
             )}
 

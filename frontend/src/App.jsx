@@ -15,7 +15,7 @@ import GraphChat from './components/GraphChat';
 import { ThemeProvider, applyThemeToDOM } from './components/ThemeProvider';
 
 function App() {
-    const { graphData, currentWorkspace, currentThread, activeView, setActiveView, uiSettings, initialLoading } = useStore();
+    const { graphData, currentWorkspace, currentThread, activeView, setActiveView, uiSettings, initialLoading, themeLoaded } = useStore();
     const hasActiveJobs = useStore(state => state.ingestJobs && state.ingestJobs.length > 0);
     const [selectedNode, setSelectedNode] = useState(null);
 
@@ -82,25 +82,43 @@ function App() {
         setGraphChatOpen(true);
     }, [setGraphChatFocusedNode, setGraphChatOpen]);
 
-    // Fetch workspaces on app startup
+    // Fetch workspaces and theme on app startup
     useEffect(() => {
-        useStore.getState().fetchWorkspaces();
-    }, []);
+        const fetchThemeWithRetry = async (retryCount = 0) => {
+            const maxRetries = 5;
+            const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000);
 
-    // Load theme settings on startup
-    useEffect(() => {
-        const loadTheme = async () => {
-            const config = await useStore.getState().fetchSystemConfig();
-            if (config) {
-                applyThemeToDOM({
-                    theme: config.theme || 'dark',
-                    accent_color: config.accent_color || '#8b5cf6',
-                    font_family: config.font_family || 'Inter',
-                    font_size: config.font_size || 'md',
-                });
+            try {
+                const config = await useStore.getState().fetchSystemConfig();
+                if (config) {
+                    applyThemeToDOM({
+                        theme: config.theme || 'dark',
+                        accent_color: config.accent_color || '#8b5cf6',
+                        font_family: config.font_family || 'Inter',
+                        font_size: config.font_size || 'md',
+                    });
+                    return true;
+                }
+                if (retryCount < maxRetries) {
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                    return fetchThemeWithRetry(retryCount + 1);
+                }
+                return false;
+            } catch (e) {
+                if (retryCount < maxRetries) {
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                    return fetchThemeWithRetry(retryCount + 1);
+                }
+                return false;
             }
         };
-        loadTheme();
+
+        const initialize = async () => {
+            await fetchThemeWithRetry();
+            useStore.setState({ themeLoaded: true });
+            useStore.getState().fetchWorkspaces();
+        };
+        initialize();
     }, []);
 
     // Global Ingest Polling
@@ -117,27 +135,30 @@ function App() {
         return () => clearInterval(interval);
     }, [currentWorkspace, hasActiveJobs]);
 
-    // Show loading state during initial fetch
-    if (initialLoading) {
+    // Show loading state while theme or workspaces are loading
+    if (!themeLoaded || initialLoading) {
         return (
             <ThemeProvider>
-                <div className="flex h-screen w-full bg-gray-950 text-white font-sans items-center justify-center">
+                <div
+                    className="flex h-screen w-full font-sans items-center justify-center"
+                    style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                >
                     <style>{`
                         @keyframes pulse-glow {
                             0%, 100% { 
-                                box-shadow: 0 0 20px 0px rgba(139, 92, 246, 0.4);
-                                border-color: rgba(139, 92, 246, 0.6);
+                                box-shadow: 0 0 20px 0px color-mix(in srgb, var(--accent) 40%, transparent);
+                                border-color: color-mix(in srgb, var(--accent) 60%, transparent);
                             }
                             50% { 
-                                box-shadow: 0 0 40px 10px rgba(139, 92, 246, 0.8);
-                                border-color: rgba(139, 92, 246, 1);
+                                box-shadow: 0 0 40px 10px color-mix(in srgb, var(--accent) 80%, transparent);
+                                border-color: var(--accent);
                             }
                         }
                         .loading-circle {
                             width: 64px;
                             height: 64px;
                             border-radius: 50%;
-                            border: 4px solid rgba(139, 92, 246, 0.6);
+                            border: 4px solid var(--accent);
                             animation: pulse-glow 1.5s ease-in-out infinite !important;
                             transition: none !important;
                         }
@@ -146,7 +167,7 @@ function App() {
                             font-size: 1.125rem;
                             font-weight: 500;
                             letter-spacing: 0.05em;
-                            color: #9ca3af;
+                            color: var(--text-muted);
                         }
                     `}</style>
                     <div className="flex flex-col items-center">
@@ -157,6 +178,8 @@ function App() {
             </ThemeProvider>
         )
     }
+
+
 
     if (!currentWorkspace) {
         return (
