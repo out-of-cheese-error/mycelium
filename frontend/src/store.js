@@ -13,6 +13,7 @@ export const useStore = create((set, get) => ({
     graphData: { nodes: [], links: [] },
     isLoading: false,
     initialLoading: true, // Track initial app loading state
+    themeLoaded: false, // Track when theme has been applied
     API_BASE: API_base,
 
     // View State
