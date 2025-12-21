@@ -59,18 +59,39 @@ async function getApiUrl() {
 // Apply theme to the extension
 function applyTheme(settings) {
     const { theme = 'dark', accent_color = '#8b5cf6' } = settings;
-    const root = document.documentElement;
 
-    // Apply theme colors
+    // Get theme colors
     const themeColors = THEMES[theme] || THEMES.dark;
-    Object.entries(themeColors).forEach(([key, value]) => {
-        root.style.setProperty(key, value);
-    });
 
-    // Apply accent color
-    root.style.setProperty('--accent', accent_color);
-    root.style.setProperty('--accent-hover', adjustColor(accent_color, -20));
-    root.style.setProperty('--accent-muted', accent_color + '40');
+    // Generate accent variations
+    const accentHover = adjustColor(accent_color, -20);
+    const accentMuted = accent_color + '40';
+
+    // Create or update theme style element
+    let styleEl = document.getElementById('mycelium-theme');
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'mycelium-theme';
+        document.head.appendChild(styleEl);
+    }
+
+    // Build CSS string with all theme variables
+    styleEl.textContent = `
+        :root {
+            --bg-primary: ${themeColors['--bg-primary']} !important;
+            --bg-secondary: ${themeColors['--bg-secondary']} !important;
+            --bg-tertiary: ${themeColors['--bg-tertiary']} !important;
+            --bg-elevated: ${themeColors['--bg-elevated']} !important;
+            --text-primary: ${themeColors['--text-primary']} !important;
+            --text-secondary: ${themeColors['--text-secondary']} !important;
+            --text-muted: ${themeColors['--text-muted']} !important;
+            --border-color: ${themeColors['--border-color']} !important;
+            --border-subtle: ${themeColors['--border-subtle']} !important;
+            --accent: ${accent_color} !important;
+            --accent-hover: ${accentHover} !important;
+            --accent-muted: ${accentMuted} !important;
+        }
+    `;
 }
 
 // Helper to darken/lighten a hex color
@@ -86,17 +107,20 @@ function adjustColor(hex, amount) {
 async function loadTheme() {
     try {
         const apiUrl = await getApiUrl();
-        const response = await fetch(`${apiUrl}/config/ui`);
+        const response = await fetch(`${apiUrl}/system/config`);
         if (response.ok) {
             const settings = await response.json();
             applyTheme(settings);
         }
     } catch (e) {
-        console.log('Could not load theme, using defaults');
+        // Silently use defaults if backend unavailable
     }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Load theme first
+    await loadTheme();
+
     const workspaceSelect = document.getElementById('workspaceSelect');
     const threadSelect = document.getElementById('threadSelect');
     const messagesContainer = document.getElementById('messagesContainer');
@@ -802,7 +826,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Initialize
-    await loadTheme(); // Load theme from backend
     await loadWorkspaces();
     updateInputState();
 });
