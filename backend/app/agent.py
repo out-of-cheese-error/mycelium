@@ -1023,7 +1023,24 @@ def generate_node(state: AgentState, config: RunnableConfig):
     # Load Config (System Prompt + Settings)
     base_system_prompt = "You are a helpful assistant with a long-term memory."
     allow_search = True
-    enabled_tools = None # Default to None (all enabled)
+    # Default enabled tools (matches WorkspaceSettings defaults)
+    DEFAULT_ENABLED_TOOLS = [
+        # Search & Web
+        "duckduckgo_search", "visit_page", "search_images", "search_books", "search_authors",
+        # Knowledge & Notes
+        "create_note", "read_note", "update_note", "list_notes", "delete_note", "search_notes",
+        # Graph Operations
+        "add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge", 
+        "search_graph_nodes", "traverse_graph_node", "search_concepts",
+        # Ingestion
+        "search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia", 
+        "ingest_wikipedia_page", "check_ingestion_status", "get_books_by_subject", "ingest_web_page",
+        # Science / Research
+        "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
+        # Utility
+        "generate_lesson"
+    ]
+    enabled_tools = DEFAULT_ENABLED_TOOLS  # Default to curated list
     
     try:
         config_path = f"./memory_data/{workspace_id}/config.json"
@@ -1031,10 +1048,10 @@ def generate_node(state: AgentState, config: RunnableConfig):
             ws_config = json.load(f)
             base_system_prompt = ws_config.get("system_prompt", base_system_prompt)
             allow_search = ws_config.get("allow_search", True)
-            enabled_tools = ws_config.get("enabled_tools", None)
-            print(f"DEBUG [generate_node]: Loaded config for {workspace_id}, enabled_tools={enabled_tools}")
+            enabled_tools = ws_config.get("enabled_tools", DEFAULT_ENABLED_TOOLS)
+            print(f"DEBUG [generate_node]: Loaded config for {workspace_id}, enabled_tools count={len(enabled_tools) if enabled_tools else 'None'}")
     except Exception as e:
-        print(f"DEBUG [generate_node]: Failed to load config: {e}")
+        print(f"DEBUG [generate_node]: No config found, using defaults: {e}")
 
 
     # ... (Emotions and Notes loading omitted for brevity, logic remains same) ...
@@ -1488,14 +1505,26 @@ async def dynamic_tool_node(state: AgentState, config: RunnableConfig):
     """Executes tool calls with workspace-scoped filtering."""
     workspace_id = state.get("workspace_id", "default")
     
+    # Default enabled tools (matches WorkspaceSettings defaults)
+    DEFAULT_ENABLED_TOOLS = [
+        "duckduckgo_search", "visit_page", "search_images", "search_books", "search_authors",
+        "create_note", "read_note", "update_note", "list_notes", "delete_note", "search_notes",
+        "add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge", 
+        "search_graph_nodes", "traverse_graph_node", "search_concepts",
+        "search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia", 
+        "ingest_wikipedia_page", "check_ingestion_status", "get_books_by_subject", "ingest_web_page",
+        "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
+        "generate_lesson"
+    ]
+    
     # Load enabled_tools from workspace config
-    enabled_tools = None
+    enabled_tools = DEFAULT_ENABLED_TOOLS
     try:
         config_path = f"./memory_data/{workspace_id}/config.json"
         if os.path.exists(config_path):
             with open(config_path, 'r') as f:
                 ws_config = json.load(f)
-                enabled_tools = ws_config.get("enabled_tools", None)
+                enabled_tools = ws_config.get("enabled_tools", DEFAULT_ENABLED_TOOLS)
     except Exception as e:
         print(f"DEBUG: Error loading tools config: {e}")
     
