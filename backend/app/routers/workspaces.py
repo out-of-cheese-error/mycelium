@@ -97,7 +97,23 @@ async def get_workspace_stats(workspace_id: str):
 class WorkspaceSettings(BaseModel):
     system_prompt: str = "You are a helpful assistant with a long-term memory."
     allow_search: bool = True
-    enabled_tools: Optional[List[str]] = None
+    # Default enabled tools - MCP and other categories disabled by default
+    enabled_tools: Optional[List[str]] = [
+        # Search & Web
+        "duckduckgo_search", "visit_page", "search_images", "search_books", "search_authors",
+        # Knowledge & Notes
+        "create_note", "read_note", "update_note", "list_notes", "delete_note", "search_notes",
+        # Graph Operations
+        "add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge", 
+        "search_graph_nodes", "traverse_graph_node", "search_concepts",
+        # Ingestion
+        "search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia", 
+        "ingest_wikipedia_page", "check_ingestion_status", "get_books_by_subject", "ingest_web_page",
+        # Science / Research
+        "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
+        # Utility
+        "generate_lesson"
+    ]
     
     # Context Settings (Per Workspace)
     chat_message_limit: int = 20
