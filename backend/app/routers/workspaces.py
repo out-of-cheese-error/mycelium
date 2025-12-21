@@ -298,6 +298,90 @@ async def stop_ingest(workspace_id: str, job_id: str):
     stopped = stop_ingestion(workspace_id, job_id)
     return {"status": "stopped" if stopped else "not_running"}
 
+class IngestUrlRequest(BaseModel):
+    url: str
+    title: Optional[str] = None
+
+@router.post("/{workspace_id}/ingest-url")
+async def ingest_url(workspace_id: str, request: IngestUrlRequest, background_tasks: BackgroundTasks):
+    """
+    Ingest a web page URL into the knowledge graph.
+    Used by the Chrome extension for quick ingestion.
+    """
+    import httpx
+    from bs4 import BeautifulSoup
+    
+    path = os.path.join(MEMORY_BASE_DIR, workspace_id)
+    if not os.path.exists(path):
+        # Create workspace if it doesn't exist
+        GraphMemory(workspace_id=workspace_id, base_dir=MEMORY_BASE_DIR)
+    
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
+        }
+        
+        # 1. Download Content
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers) as client:
+            resp = await client.get(request.url)
+            resp.raise_for_status()
+            
+            soup = BeautifulSoup(resp.content, 'html.parser')
+            
+            # Remove scripts and styles
+            for script in soup(["script", "style", "nav", "footer", "header"]):
+                script.decompose()
+                
+            text = soup.get_text(separator="\n")
+            
+            # Clean
+            lines = (line.strip() for line in text.splitlines())
+            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+            text = '\n'.join(chunk for chunk in chunks if chunk)
+            
+        if not text:
+            raise HTTPException(status_code=400, detail="Extracted text is empty")
+
+        # 2. Save to Temp
+        temp_dir = os.path.join(os.getcwd(), "temp", workspace_id)
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Safe filename
+        safe_name = "".join(x for x in request.url.split("//")[-1] if x.isalnum() or x in "-_.")[:50]
+        filename = f"web_{safe_name}_{uuid.uuid4().hex[:6]}.txt"
+        file_path = os.path.join(temp_dir, filename)
+        
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(f"URL: {request.url}\n\n{text}")
+            
+        # 3. Ingest in background
+        from app.document_processor import process_file
+        job_id = str(uuid.uuid4())
+        
+        async def do_ingest():
+            try:
+                await process_file(file_path, workspace_id, chunk_size=4000, job_id=job_id)
+                os.remove(file_path)
+            except Exception as e:
+                print(f"Ingestion error: {e}")
+        
+        # Run in background
+        import asyncio
+        asyncio.create_task(do_ingest())
+        
+        return {
+            "status": "started",
+            "job_id": job_id,
+            "message": f"Ingesting {request.url}",
+            "url": request.url,
+            "title": request.title
+        }
+        
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+
 import time
 
 class Note(BaseModel):
