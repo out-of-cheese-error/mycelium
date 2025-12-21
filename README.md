@@ -195,6 +195,8 @@ See the [Configuration](#configuration) section for provider-specific examples.
 
 ## Configuration
 
+> **Tip:** You can configure these settings through the **Global Settings** menu in the application UI instead of manually editing the JSON file.
+
 Edit `backend/llm_config.json` with your preferred provider:
 
 ### Ollama
@@ -282,8 +284,6 @@ You can use different providers for chat (LLM) and embeddings. For example, use 
   "tts_enabled": false
 }
 ```
-
-> **Tip:** You can also configure these settings through the **Global Settings** menu in the application UI instead of manually editing the JSON file.
 
 ---
 
