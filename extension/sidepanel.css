@@ -47,6 +47,36 @@ body {
     color: var(--success);
 }
 
+.page-info.error {
+    color: var(--error);
+}
+
+/* Ingest Button */
+.btn-ingest {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin: 8px 0;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-ingest:hover:not(:disabled) {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+.btn-ingest:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .context-limit {
     display: flex;
     align-items: center;
