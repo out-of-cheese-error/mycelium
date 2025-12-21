@@ -11,8 +11,8 @@ export const useStore = create((set, get) => ({
     emotions: null, // { happiness, trust, anger }
     messages: [], // Chat messages for current session
     graphData: { nodes: [], links: [] },
-    graphData: { nodes: [], links: [] },
     isLoading: false,
+    initialLoading: true, // Track initial app loading state
     API_BASE: API_base,
 
     // View State
@@ -31,10 +31,13 @@ export const useStore = create((set, get) => ({
     setActiveView: (view) => set({ activeView: view }),
     setChatInput: (input) => set({ chatInput: input }),
 
-    fetchWorkspaces: async () => {
+    fetchWorkspaces: async (retryCount = 0) => {
+        const maxRetries = 5;
+        const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff, max 5s
+
         try {
             const res = await axios.get(`${API_base}/workspaces/`);
-            set({ workspaces: res.data });
+            set({ workspaces: res.data, initialLoading: false });
 
             // Auto-select: Prefer persisted ID, else first available
             const persistedWsId = localStorage.getItem('lastWorkspaceId');
@@ -47,6 +50,17 @@ export const useStore = create((set, get) => ({
             }
         } catch (e) {
             console.error("Fetch workspaces failed", e);
+            // Retry with exponential backoff if backend not ready
+            if (retryCount < maxRetries) {
+                console.log(`Retrying in ${retryDelay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                setTimeout(() => {
+                    get().fetchWorkspaces(retryCount + 1);
+                }, retryDelay);
+            } else {
+                // Give up after max retries
+                set({ initialLoading: false });
+                console.error("Failed to connect to backend after multiple retries");
+            }
         }
     },
 

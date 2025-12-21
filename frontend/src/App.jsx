@@ -15,7 +15,7 @@ import GraphChat from './components/GraphChat';
 import { ThemeProvider, applyThemeToDOM } from './components/ThemeProvider';
 
 function App() {
-    const { graphData, currentWorkspace, currentThread, activeView, setActiveView, uiSettings } = useStore();
+    const { graphData, currentWorkspace, currentThread, activeView, setActiveView, uiSettings, initialLoading } = useStore();
     const hasActiveJobs = useStore(state => state.ingestJobs && state.ingestJobs.length > 0);
     const [selectedNode, setSelectedNode] = useState(null);
 
@@ -82,6 +82,11 @@ function App() {
         setGraphChatOpen(true);
     }, [setGraphChatFocusedNode, setGraphChatOpen]);
 
+    // Fetch workspaces on app startup
+    useEffect(() => {
+        useStore.getState().fetchWorkspaces();
+    }, []);
+
     // Load theme settings on startup
     useEffect(() => {
         const loadTheme = async () => {
@@ -111,6 +116,47 @@ function App() {
         }
         return () => clearInterval(interval);
     }, [currentWorkspace, hasActiveJobs]);
+
+    // Show loading state during initial fetch
+    if (initialLoading) {
+        return (
+            <ThemeProvider>
+                <div className="flex h-screen w-full bg-gray-950 text-white font-sans items-center justify-center">
+                    <style>{`
+                        @keyframes pulse-glow {
+                            0%, 100% { 
+                                box-shadow: 0 0 20px 0px rgba(139, 92, 246, 0.4);
+                                border-color: rgba(139, 92, 246, 0.6);
+                            }
+                            50% { 
+                                box-shadow: 0 0 40px 10px rgba(139, 92, 246, 0.8);
+                                border-color: rgba(139, 92, 246, 1);
+                            }
+                        }
+                        .loading-circle {
+                            width: 64px;
+                            height: 64px;
+                            border-radius: 50%;
+                            border: 4px solid rgba(139, 92, 246, 0.6);
+                            animation: pulse-glow 1.5s ease-in-out infinite !important;
+                            transition: none !important;
+                        }
+                        .loading-text {
+                            margin-top: 2rem;
+                            font-size: 1.125rem;
+                            font-weight: 500;
+                            letter-spacing: 0.05em;
+                            color: #9ca3af;
+                        }
+                    `}</style>
+                    <div className="flex flex-col items-center">
+                        <div className="loading-circle"></div>
+                        <p className="loading-text">Connecting to server...</p>
+                    </div>
+                </div>
+            </ThemeProvider>
+        )
+    }
 
     if (!currentWorkspace) {
         return (

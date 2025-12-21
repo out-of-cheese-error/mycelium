@@ -12,7 +12,6 @@ import logo from '../logo.png';
 const Sidebar = () => {
     const {
         workspaces,
-        fetchWorkspaces,
         createWorkspace,
         currentWorkspace,
         selectWorkspace,
@@ -38,9 +37,7 @@ const Sidebar = () => {
     const [showIngestSettings, setShowIngestSettings] = useState(false);
     const fileInputRef = useRef(null);
 
-    useEffect(() => {
-        fetchWorkspaces();
-    }, []);
+    // Note: fetchWorkspaces is now called from App.jsx on mount
 
     const handleCreate = () => {
         if (newWsName.trim()) {
