@@ -110,7 +110,7 @@ const HotTopicsArea = () => {
                     </div>
                 ) : hotTopics.length === 0 ? (
                     <div className="text-center py-20 text-gray-500">
-                        No hot topics found. Try adding more data to your graph.
+                        No hot topics found. Try adding more data to your graph, or click Refresh.
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
