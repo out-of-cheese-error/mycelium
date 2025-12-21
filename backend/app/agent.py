@@ -1175,6 +1175,17 @@ def generate_node(state: AgentState, config: RunnableConfig):
     
     llm = get_llm()
     
+    # Get MCP tools from connected servers
+    try:
+        from app.services.mcp_service import get_mcp_langchain_tools
+        mcp_tools = get_mcp_langchain_tools()
+    except Exception as e:
+        print(f"DEBUG [generate_node]: Failed to get MCP tools: {e}")
+        mcp_tools = []
+    
+    # Combine builtin tools with MCP tools
+    all_available_tools = list(tools) + mcp_tools
+    
     final_tools = []
     
     if enabled_tools is not None:
@@ -1182,16 +1193,16 @@ def generate_node(state: AgentState, config: RunnableConfig):
         # If list is empty, NO tools are enabled.
         # Check against t.name
         safe_list = set(enabled_tools)
-        final_tools = [t for t in tools if t.name in safe_list]
+        final_tools = [t for t in all_available_tools if t.name in safe_list]
     else:
         # Legacy/Default Mode: logic based on allow_search
         # Always include note tools + others, filter search if needed
         # Actually in "all enabled" mode we include everything.
         # But if allow_search is false, we remove search.
         if allow_search:
-             final_tools = tools
+             final_tools = all_available_tools
         else:
-             final_tools = [t for t in tools if not (isinstance(t, DuckDuckGoSearchRun) or t.name == "search_images")]
+             final_tools = [t for t in all_available_tools if not (isinstance(t, DuckDuckGoSearchRun) or t.name == "search_images")]
              
     # Clean binding
     # Clean binding
@@ -1489,11 +1500,22 @@ async def dynamic_tool_node(state: AgentState, config: RunnableConfig):
         print(f"DEBUG: Error loading tools config: {e}")
     
     # Filter tools based on enabled_tools
+    # Get MCP tools from connected servers
+    try:
+        from app.services.mcp_service import get_mcp_langchain_tools
+        mcp_tools = get_mcp_langchain_tools()
+    except Exception as e:
+        print(f"DEBUG [dynamic_tool_node]: Failed to get MCP tools: {e}")
+        mcp_tools = []
+    
+    # Combine builtin tools with MCP tools
+    all_available_tools = list(tools) + mcp_tools
+    
     if enabled_tools is not None:
         safe_list = set(enabled_tools)
-        filtered_tools = [t for t in tools if t.name in safe_list]
+        filtered_tools = [t for t in all_available_tools if t.name in safe_list]
     else:
-        filtered_tools = tools
+        filtered_tools = all_available_tools
     
     # Create ToolNode with filtered tools and invoke asynchronously with config
     tool_executor = ToolNode(filtered_tools)

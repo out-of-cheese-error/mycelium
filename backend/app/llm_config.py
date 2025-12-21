@@ -1,9 +1,16 @@
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, List, Dict, Optional
 import os
 import json
 
 CONFIG_FILE = "llm_config.json"
+
+class MCPServerConfig(BaseModel):
+    """Configuration for an MCP (Model Context Protocol) server."""
+    name: str  # Display name for the server
+    command: str  # Command to run (e.g., "npx", "python", "node")
+    args: List[str] = []  # Arguments (e.g., ["-y", "@modelcontextprotocol/server-brave-search"])
+    env: Dict[str, str] = {}  # Environment variables (e.g., {"BRAVE_API_KEY": "xxx"})
 
 class LLMConfigModel(BaseModel):
     # Provider Selection for Chat LLM: "openai" (for OpenAI API), "ollama" (for Ollama), "lmstudio" (for LM Studio)
@@ -41,6 +48,16 @@ class LLMConfigModel(BaseModel):
     accent_color: str = "#8b5cf6"  # purple accent
     font_family: str = "Inter"  # Inter, Roboto, Source Code Pro, system
     font_size: str = "md"  # sm, md, lg
+
+    # MCP (Model Context Protocol) Servers
+    mcp_servers: List[MCPServerConfig] = [
+        MCPServerConfig(
+            name="filesystem",
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-filesystem", "/app"],
+            env={}
+        )
+    ]
 
 class LLMConfig:
     _instance = None

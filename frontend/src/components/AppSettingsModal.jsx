@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Palette, Server, Volume2, Settings2, RefreshCw, Check } from 'lucide-react';
+import { X, Save, Palette, Server, Volume2, Settings2, RefreshCw, Check, Plug, Plus, Trash2, Play, AlertCircle } from 'lucide-react';
 import { useStore } from '../store';
 import { THEMES, applyThemeToDOM } from './ThemeProvider';
 
@@ -72,6 +72,8 @@ const AppSettingsModal = ({ onClose }) => {
         accent_color: '#8b5cf6',
         font_family: 'Inter',
         font_size: 'md',
+        // MCP Servers
+        mcp_servers: [],
     });
 
     const [isLoading, setIsLoading] = useState(true);
@@ -103,6 +105,7 @@ const AppSettingsModal = ({ onClose }) => {
                     accent_color: data.accent_color || '#8b5cf6',
                     font_family: data.font_family || 'Inter',
                     font_size: data.font_size || 'md',
+                    mcp_servers: data.mcp_servers || [],
                 });
             }
             setIsLoading(false);
@@ -125,6 +128,53 @@ const AppSettingsModal = ({ onClose }) => {
         const models = await fetchModels();
         setAvailableModels(models);
         setIsFetchingModels(false);
+    };
+
+    // MCP Server management
+    const [newMcpServer, setNewMcpServer] = useState({ name: '', command: '', args: '', env: '' });
+    const [testingServer, setTestingServer] = useState(null);
+    const [testResult, setTestResult] = useState(null);
+
+    const handleAddMcpServer = () => {
+        if (!newMcpServer.name.trim() || !newMcpServer.command.trim()) {
+            alert('Name and Command are required');
+            return;
+        }
+        const serverConfig = {
+            name: newMcpServer.name.trim(),
+            command: newMcpServer.command.trim(),
+            args: newMcpServer.args.split(' ').filter(s => s.trim()),
+            env: newMcpServer.env ? Object.fromEntries(
+                newMcpServer.env.split(',').map(pair => {
+                    const [k, v] = pair.split('=').map(s => s.trim());
+                    return [k, v];
+                }).filter(([k, v]) => k && v)
+            ) : {}
+        };
+        setConfig(c => ({ ...c, mcp_servers: [...c.mcp_servers, serverConfig] }));
+        setNewMcpServer({ name: '', command: '', args: '', env: '' });
+    };
+
+    const handleRemoveMcpServer = (name) => {
+        setConfig(c => ({ ...c, mcp_servers: c.mcp_servers.filter(s => s.name !== name) }));
+    };
+
+    const handleTestMcpServer = async (server) => {
+        setTestingServer(server.name);
+        setTestResult(null);
+        try {
+            const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:8000'}/system/mcp/test`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(server)
+            });
+            const data = await res.json();
+            setTestResult({ server: server.name, ...data });
+        } catch (e) {
+            setTestResult({ server: server.name, connected: false, error: e.message });
+        } finally {
+            setTestingServer(null);
+        }
     };
 
     const handleSave = async () => {
@@ -190,6 +240,9 @@ const AppSettingsModal = ({ onClose }) => {
                     </TabButton>
                     <TabButton active={activeTab === 'appearance'} onClick={() => setActiveTab('appearance')} icon={Palette}>
                         Appearance
+                    </TabButton>
+                    <TabButton active={activeTab === 'mcp'} onClick={() => setActiveTab('mcp')} icon={Plug}>
+                        MCP
                     </TabButton>
                 </div>
 
@@ -606,6 +659,133 @@ const AppSettingsModal = ({ onClose }) => {
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* MCP TAB */}
+                    {activeTab === 'mcp' && (
+                        <div className="space-y-6">
+                            <div className="p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                <h4 className="text-sm font-bold mb-2" style={{ color: 'var(--accent)' }}>MCP Servers</h4>
+                                <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+                                    Configure Model Context Protocol servers to add external tools. These tools will be available across all workspaces.
+                                </p>
+
+                                {/* Existing Servers */}
+                                {config.mcp_servers.length > 0 && (
+                                    <div className="space-y-2 mb-4">
+                                        {config.mcp_servers.map((server, idx) => (
+                                            <div key={idx} className="flex items-center gap-2 p-3 rounded border" style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)' }}>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <Plug size={14} style={{ color: 'var(--accent)' }} />
+                                                        <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{server.name}</span>
+                                                    </div>
+                                                    <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                                                        {server.command} {server.args.join(' ')}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleTestMcpServer(server)}
+                                                    disabled={testingServer === server.name}
+                                                    className="p-2 rounded transition-colors disabled:opacity-50"
+                                                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
+                                                    title="Test Connection"
+                                                >
+                                                    {testingServer === server.name ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleRemoveMcpServer(server.name)}
+                                                    className="p-2 rounded transition-colors hover:bg-red-500/20"
+                                                    style={{ color: 'var(--text-muted)' }}
+                                                    title="Remove"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Test Result */}
+                                {testResult && (
+                                    <div className={`p-3 rounded mb-4 flex items-start gap-2 ${testResult.connected ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                                        {testResult.connected ? (
+                                            <Check size={16} className="text-green-500 mt-0.5" />
+                                        ) : (
+                                            <AlertCircle size={16} className="text-red-500 mt-0.5" />
+                                        )}
+                                        <div className="flex-1">
+                                            <div className="text-sm font-medium" style={{ color: testResult.connected ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)' }}>
+                                                {testResult.connected ? `Connected! Found ${testResult.tools?.length || 0} tools` : 'Connection failed'}
+                                            </div>
+                                            {testResult.error && (
+                                                <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{testResult.error}</div>
+                                            )}
+                                            {testResult.connected && testResult.tools?.length > 0 && (
+                                                <div className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                                                    Tools: {testResult.tools.map(t => t.name).join(', ')}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Add New Server */}
+                                <div className="p-3 rounded border" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-subtle)' }}>
+                                    <h5 className="text-xs font-bold mb-3" style={{ color: 'var(--text-muted)' }}>Add New Server</h5>
+                                    <div className="grid grid-cols-2 gap-3 mb-3">
+                                        <div>
+                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Name *</label>
+                                            <input
+                                                className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                value={newMcpServer.name}
+                                                onChange={e => setNewMcpServer({ ...newMcpServer, name: e.target.value })}
+                                                placeholder="brave-search"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Command *</label>
+                                            <input
+                                                className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                value={newMcpServer.command}
+                                                onChange={e => setNewMcpServer({ ...newMcpServer, command: e.target.value })}
+                                                placeholder="npx"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Arguments (space-separated)</label>
+                                        <input
+                                            className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                            style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                            value={newMcpServer.args}
+                                            onChange={e => setNewMcpServer({ ...newMcpServer, args: e.target.value })}
+                                            placeholder="-y @modelcontextprotocol/server-brave-search"
+                                        />
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Environment Variables (comma-separated KEY=VALUE)</label>
+                                        <input
+                                            className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                            style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                            value={newMcpServer.env}
+                                            onChange={e => setNewMcpServer({ ...newMcpServer, env: e.target.value })}
+                                            placeholder="BRAVE_API_KEY=xxx, OTHER_VAR=yyy"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={handleAddMcpServer}
+                                        className="flex items-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors"
+                                        style={{ backgroundColor: 'var(--accent)', color: 'white' }}
+                                    >
+                                        <Plus size={14} />
+                                        Add Server
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

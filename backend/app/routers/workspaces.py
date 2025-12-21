@@ -115,9 +115,29 @@ def get_config_path(workspace_id: str):
 
 @router.get("/available_tools")
 async def get_available_tools():
-    """Returns a list of all available tool names."""
+    """Returns a categorized list of all available tools."""
     from app.agent import tools
-    return [t.name for t in tools]
+    from app.services.mcp_service import mcp_service
+    
+    # Get builtin tool names
+    builtin_tools = [t.name for t in tools]
+    
+    # Get MCP tools (if any servers are connected)
+    mcp_tools = []
+    for server_name, server in mcp_service._servers.items():
+        if server.connected:
+            for tool in server.tools:
+                mcp_tools.append({
+                    "name": f"mcp_{server_name}_{tool.get('name', '')}".replace("-", "_").replace(".", "_"),
+                    "server": server_name,
+                    "original_name": tool.get("name", ""),
+                    "description": tool.get("description", "")
+                })
+    
+    return {
+        "builtin": builtin_tools,
+        "mcp": mcp_tools
+    }
 
 @router.get("/exposed_tools")
 async def get_exposed_tools():

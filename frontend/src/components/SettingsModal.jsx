@@ -25,6 +25,7 @@ const SettingsModal = ({ workspaceId, onClose }) => {
 
     // Tools State
     const [availableTools, setAvailableTools] = useState([]);
+    const [mcpTools, setMcpTools] = useState([]);
     const [enabledTools, setEnabledTools] = useState([]);
 
     // Generator State
@@ -86,14 +87,18 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                 fetchAvailableTools()
             ]);
 
-            setAvailableTools(tools || []);
+            setAvailableTools(tools.builtin || tools || []);
+            setMcpTools(tools.mcp || []);
+
+            // Combined list for enabled tools comparison
+            const allToolNames = [...(tools.builtin || tools || []), ...(tools.mcp || []).map(t => t.name)];
 
             if (settings) {
                 setSystemPrompt(settings.system_prompt);
                 if (settings.enabled_tools) {
                     setEnabledTools(settings.enabled_tools);
                 } else {
-                    setEnabledTools(tools || []);
+                    setEnabledTools(allToolNames);
                 }
                 setChatMessageLimit(settings.chat_message_limit !== undefined ? settings.chat_message_limit : 20);
                 setGraphK(settings.graph_k !== undefined ? settings.graph_k : 3);
@@ -394,13 +399,57 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                                         categorizedTools["Other"] = otherTools;
                                     }
 
+                                    // Add MCP categories - group by server name
+                                    if (mcpTools.length > 0) {
+                                        const mcpByServer = {};
+                                        mcpTools.forEach(t => {
+                                            const serverName = t.server || 'unknown';
+                                            if (!mcpByServer[serverName]) {
+                                                mcpByServer[serverName] = [];
+                                            }
+                                            mcpByServer[serverName].push(t.name);
+                                        });
+
+                                        Object.entries(mcpByServer).forEach(([server, tools]) => {
+                                            categorizedTools[`MCP: ${server}`] = tools;
+                                        });
+                                    }
+
+                                    // Helper functions for category selection
+                                    const selectCategory = (tools) => {
+                                        setEnabledTools(prev => [...new Set([...prev, ...tools])]);
+                                    };
+                                    const deselectCategory = (tools) => {
+                                        setEnabledTools(prev => prev.filter(t => !tools.includes(t)));
+                                    };
+                                    const isCategoryFullySelected = (tools) => tools.every(t => enabledTools.includes(t));
+
                                     return Object.entries(categorizedTools).map(([category, tools]) => {
                                         if (tools.length === 0) return null;
+                                        const allSelected = isCategoryFullySelected(tools);
                                         return (
                                             <div key={category} className="mb-4 last:mb-0">
-                                                <h4 className="text-xs font-bold uppercase mb-2 sticky top-0 py-1" style={{ color: 'var(--accent)', backgroundColor: 'var(--bg-primary)' }}>
-                                                    {category}
-                                                </h4>
+                                                <div className="flex items-center justify-between sticky top-0 py-1" style={{ backgroundColor: 'var(--bg-primary)' }}>
+                                                    <h4 className="text-xs font-bold uppercase" style={{ color: 'var(--accent)' }}>
+                                                        {category}
+                                                    </h4>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => selectCategory(tools)}
+                                                            className="text-xs px-2 py-0.5 rounded transition-colors hover:opacity-80"
+                                                            style={{ color: allSelected ? 'var(--text-muted)' : 'var(--accent)' }}
+                                                        >
+                                                            All
+                                                        </button>
+                                                        <button
+                                                            onClick={() => deselectCategory(tools)}
+                                                            className="text-xs px-2 py-0.5 rounded transition-colors hover:opacity-80"
+                                                            style={{ color: 'var(--text-muted)' }}
+                                                        >
+                                                            None
+                                                        </button>
+                                                    </div>
+                                                </div>
                                                 <div className="grid grid-cols-2 gap-2">
                                                     {tools.map(tool => (
                                                         <div key={tool} className="flex items-center gap-2">
