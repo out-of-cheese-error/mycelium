@@ -3,10 +3,11 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { Box, Plus, Upload, MessageSquare, Trash2, X, Settings } from 'lucide-react';
 import SettingsModal from './SettingsModal';
-import GlobalSettingsModal from './GlobalSettingsModal';
+import AppSettingsModal from './AppSettingsModal';
 import EmotionsPanel from './EmotionsPanel';
 
 import logo from '../logo.png';
+
 
 const Sidebar = () => {
     const {
@@ -283,7 +284,7 @@ const Sidebar = () => {
             )}
 
             {showGlobalSettings && (
-                <GlobalSettingsModal
+                <AppSettingsModal
                     onClose={() => setShowGlobalSettings(false)}
                 />
             )}

@@ -34,6 +34,12 @@ class LLMConfigModel(BaseModel):
     # Reddit Settings
     reddit_user_agent: str = "python:graph_chat_agent:v1.0 (public access)"
 
+    # UI Appearance Settings
+    theme: str = "dark"  # dark, light, midnight, forest
+    accent_color: str = "#8b5cf6"  # purple accent
+    font_family: str = "Inter"  # Inter, Roboto, Source Code Pro, system
+    font_size: str = "md"  # sm, md, lg
+
 class LLMConfig:
     _instance = None
 

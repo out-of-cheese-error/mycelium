@@ -1,27 +1,173 @@
+/* Font imports - Google Fonts - MUST be at the top */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Source+Code+Pro:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-900 text-white;
-  overflow: hidden;
-  /* Prevent global scroll caused by greedy children */
+/* CSS Custom Properties for Theming */
+:root {
+  /* Default theme (dark) */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #111827;
+  --bg-tertiary: #1f2937;
+  --bg-elevated: #374151;
+  --text-primary: #f9fafb;
+  --text-secondary: #e5e7eb;
+  --text-muted: #9ca3af;
+  --border-color: #374151;
+  --border-subtle: #1f2937;
+
+  /* Accent (customizable) */
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-muted: rgba(139, 92, 246, 0.25);
+
+  /* Font settings */
+  --font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
 }
 
-/* Custom Scrollbar */
+/* Apply theme to base elements - use * to catch everything */
+* {
+  font-family: var(--font-family) !important;
+}
+
+body {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  font-size: var(--font-size-base);
+  overflow: hidden;
+}
+
+/* Apply font sizes */
+.text-xs {
+  font-size: var(--font-size-xs) !important;
+}
+
+.text-sm {
+  font-size: var(--font-size-sm) !important;
+}
+
+.text-base {
+  font-size: var(--font-size-base) !important;
+}
+
+.text-lg {
+  font-size: var(--font-size-lg) !important;
+}
+
+.text-xl {
+  font-size: var(--font-size-xl) !important;
+}
+
+/* Override common Tailwind background colors to use CSS variables */
+.bg-gray-950,
+.bg-gray-900 {
+  background-color: var(--bg-primary) !important;
+}
+
+.bg-gray-800 {
+  background-color: var(--bg-tertiary) !important;
+}
+
+.bg-gray-700 {
+  background-color: var(--bg-elevated) !important;
+}
+
+.bg-black {
+  background-color: var(--bg-secondary) !important;
+}
+
+/* Override text colors */
+.text-white {
+  color: var(--text-primary) !important;
+}
+
+.text-gray-200,
+.text-gray-300 {
+  color: var(--text-secondary) !important;
+}
+
+.text-gray-400,
+.text-gray-500 {
+  color: var(--text-muted) !important;
+}
+
+/* Override border colors */
+.border-gray-800 {
+  border-color: var(--border-subtle) !important;
+}
+
+.border-gray-700,
+.border-gray-600 {
+  border-color: var(--border-color) !important;
+}
+
+/* Override accent/highlight colors - use accent for blues */
+.bg-blue-600 {
+  background-color: var(--accent) !important;
+}
+
+.bg-blue-500 {
+  background-color: var(--accent-hover) !important;
+}
+
+.text-blue-400,
+.text-blue-500 {
+  color: var(--accent) !important;
+}
+
+.border-blue-500,
+.border-blue-600 {
+  border-color: var(--accent) !important;
+}
+
+/* Purple accent variants should also use the accent color */
+.bg-purple-600,
+.bg-purple-500 {
+  background-color: var(--accent) !important;
+}
+
+.text-purple-400,
+.text-purple-500 {
+  color: var(--accent) !important;
+}
+
+/* Scrollbar using theme colors */
 ::-webkit-scrollbar {
   width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1f2937;
+  background: var(--bg-tertiary);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #4b5563;
+  background: var(--bg-elevated);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: var(--text-muted);
+}
+
+/* Smooth theme transitions - but not for font to avoid jank */
+*,
+*::before,
+*::after {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Don't transition these elements (avoid animation jank) */
+input,
+textarea,
+button,
+a,
+.no-transition {
+  transition: none;
 }
