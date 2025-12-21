@@ -56,6 +56,12 @@ class LLMConfigModel(BaseModel):
             command="npx",
             args=["-y", "@modelcontextprotocol/server-filesystem", "/app"],
             env={}
+        ),
+        MCPServerConfig(
+            name="shell",
+            command="npx",
+            args=["-y", "@mako10k/mcp-shell-server"],
+            env={}
         )
     ]
 
