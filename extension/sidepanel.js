@@ -802,6 +802,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Initialize
+    await loadTheme(); // Load theme from backend
     await loadWorkspaces();
     updateInputState();
 });
