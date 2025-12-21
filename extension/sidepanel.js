@@ -586,31 +586,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                             const jobId = ingestResult.data.job_id;
                             const apiUrl = await getApiUrl();
                             let attempts = 0;
-                            const maxAttempts = 60; // Max 2 minutes
+                            const maxAttempts = 120; // Max 4 minutes
 
                             while (attempts < maxAttempts) {
                                 try {
                                     const statusResp = await fetch(
                                         `${apiUrl}/workspaces/${currentWorkspace}/ingest_status?job_id=${jobId}`
                                     );
-                                    const status = await statusResp.json();
+                                    const data = await statusResp.json();
 
-                                    if (status.status === 'completed' || status.status === 'done' || !status.status) {
+                                    // Find our job in the jobs array
+                                    const job = data.jobs?.find(j => j.job_id === jobId);
+
+                                    if (!job || job.status === 'completed' || job.status === 'done') {
                                         break;
-                                    } else if (status.status === 'error' || status.status === 'failed') {
+                                    } else if (job.status === 'error' || job.status === 'failed') {
                                         throw new Error('Ingestion failed');
+                                    } else if (job.status === 'cancelled') {
+                                        pageInfo.textContent = 'Ingestion cancelled';
+                                        return;
                                     }
 
-                                    // Update progress
-                                    if (status.progress !== undefined) {
-                                        pageInfo.textContent = `Ingesting... ${Math.round(status.progress * 100)}%`;
+                                    // Update progress with current/total
+                                    if (job.total > 0) {
+                                        pageInfo.textContent = `Ingesting... ${job.current}/${job.total} chunks`;
                                     } else {
                                         pageInfo.textContent = `Ingesting... (${attempts + 1}s)`;
                                     }
                                 } catch (pollError) {
                                     // If status endpoint returns 404 or error, assume done
-                                    if (pollError.message.includes('404')) break;
-                                    console.log('Poll check:', pollError.message);
+                                    if (pollError.message?.includes('404')) break;
                                 }
 
                                 await new Promise(r => setTimeout(r, 2000));
@@ -800,27 +805,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     ingestBtn.addEventListener('click', async () => {
         const page = await getPageContent();
         if (!page) {
-            ingestBtn.title = 'Could not get page content';
+            pageInfo.textContent = 'Could not get page content';
             return;
         }
 
         ingestBtn.disabled = true;
-        ingestBtn.title = 'Ingesting...';
+        pageInfo.textContent = 'Starting ingestion...';
+        pageInfo.className = 'page-info ingesting';
 
         try {
-            await chrome.runtime.sendMessage({
+            const result = await chrome.runtime.sendMessage({
                 action: 'ingestUrl',
                 url: page.url,
                 title: page.title,
                 workspaceId: currentWorkspace
             });
-            ingestBtn.title = 'Page ingested ✓';
+
+            // Poll for completion if we got a job ID
+            if (result?.success && result?.data?.job_id) {
+                const jobId = result.data.job_id;
+                const apiUrl = await getApiUrl();
+                let attempts = 0;
+                const maxAttempts = 120;
+
+                while (attempts < maxAttempts) {
+                    try {
+                        const statusResp = await fetch(
+                            `${apiUrl}/workspaces/${currentWorkspace}/ingest_status`
+                        );
+                        const data = await statusResp.json();
+                        const job = data.jobs?.find(j => j.job_id === jobId);
+
+                        if (!job || job.status === 'completed' || job.status === 'done') {
+                            break;
+                        } else if (job.status === 'error' || job.status === 'failed') {
+                            throw new Error('Ingestion failed');
+                        }
+
+                        // Update progress
+                        if (job.total > 0) {
+                            pageInfo.textContent = `Ingesting... ${job.current}/${job.total} chunks`;
+                        } else {
+                            pageInfo.textContent = `Ingesting... (${attempts + 1}s)`;
+                        }
+                    } catch (pollError) {
+                        if (pollError.message?.includes('404')) break;
+                    }
+
+                    await new Promise(r => setTimeout(r, 2000));
+                    attempts++;
+                }
+            }
+
+            pageInfo.textContent = 'Ingested ✓';
+            pageInfo.className = 'page-info ingested';
             setTimeout(() => {
-                ingestBtn.title = 'Ingest current page';
+                pageInfo.textContent = '';
                 ingestBtn.disabled = false;
             }, 3000);
         } catch (e) {
-            ingestBtn.title = 'Ingest failed';
+            pageInfo.textContent = 'Ingest failed: ' + e.message;
+            pageInfo.className = 'page-info error';
             ingestBtn.disabled = false;
         }
     });
