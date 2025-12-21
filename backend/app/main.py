@@ -28,6 +28,33 @@ app.include_router(hot_topics.router)
 app.include_router(connectors.router)
 app.include_router(graph_chat.router)
 
+
+# --- MCP Server Lifecycle ---
+@app.on_event("startup")
+async def startup_event():
+    """Connect to configured MCP servers on application startup."""
+    try:
+        from app.services.mcp_service import refresh_mcp_servers
+        results = await refresh_mcp_servers()
+        for name, result in results.items():
+            if result.get("connected"):
+                print(f"MCP: Connected to '{name}' with {len(result.get('tools', []))} tools")
+            else:
+                print(f"MCP: Failed to connect to '{name}': {result.get('error', 'Unknown error')}")
+    except Exception as e:
+        print(f"MCP: Error during startup: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Disconnect all MCP servers on application shutdown."""
+    try:
+        from app.services.mcp_service import mcp_service
+        await mcp_service.disconnect_all()
+        print("MCP: All servers disconnected")
+    except Exception as e:
+        print(f"MCP: Error during shutdown: {e}")
+
 class ChatRequest(BaseModel):
     message: str
     workspace_id: str = "default"

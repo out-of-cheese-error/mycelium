@@ -97,7 +97,23 @@ async def get_workspace_stats(workspace_id: str):
 class WorkspaceSettings(BaseModel):
     system_prompt: str = "You are a helpful assistant with a long-term memory."
     allow_search: bool = True
-    enabled_tools: Optional[List[str]] = None
+    # Default enabled tools - MCP and other categories disabled by default
+    enabled_tools: Optional[List[str]] = [
+        # Search & Web
+        "duckduckgo_search", "visit_page", "search_images", "search_books", "search_authors",
+        # Knowledge & Notes
+        "create_note", "read_note", "update_note", "list_notes", "delete_note", "search_notes",
+        # Graph Operations
+        "add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge", 
+        "search_graph_nodes", "traverse_graph_node", "search_concepts",
+        # Ingestion
+        "search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia", 
+        "ingest_wikipedia_page", "check_ingestion_status", "get_books_by_subject", "ingest_web_page",
+        # Science / Research
+        "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
+        # Utility
+        "generate_lesson"
+    ]
     
     # Context Settings (Per Workspace)
     chat_message_limit: int = 20
@@ -115,9 +131,29 @@ def get_config_path(workspace_id: str):
 
 @router.get("/available_tools")
 async def get_available_tools():
-    """Returns a list of all available tool names."""
+    """Returns a categorized list of all available tools."""
     from app.agent import tools
-    return [t.name for t in tools]
+    from app.services.mcp_service import mcp_service
+    
+    # Get builtin tool names
+    builtin_tools = [t.name for t in tools]
+    
+    # Get MCP tools (if any servers are connected)
+    mcp_tools = []
+    for server_name, server in mcp_service._servers.items():
+        if server.connected:
+            for tool in server.tools:
+                mcp_tools.append({
+                    "name": f"mcp_{server_name}_{tool.get('name', '')}".replace("-", "_").replace(".", "_"),
+                    "server": server_name,
+                    "original_name": tool.get("name", ""),
+                    "description": tool.get("description", "")
+                })
+    
+    return {
+        "builtin": builtin_tools,
+        "mcp": mcp_tools
+    }
 
 @router.get("/exposed_tools")
 async def get_exposed_tools():
