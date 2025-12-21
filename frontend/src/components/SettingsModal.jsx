@@ -350,11 +350,11 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                         <div className="space-y-4">
                             <div className="flex items-center justify-between mb-2">
                                 <label className="text-sm font-bold" style={{ color: 'var(--text-muted)' }}>
-                                    Enabled Tools ({enabledTools.length}/{availableTools.length})
+                                    Enabled Tools ({enabledTools.length}/{availableTools.length + mcpTools.length})
                                 </label>
                                 <div className="flex gap-2">
                                     <button
-                                        onClick={() => setEnabledTools(availableTools)}
+                                        onClick={() => setEnabledTools([...availableTools, ...mcpTools.map(t => t.name)])}
                                         className="text-xs px-2 py-1 rounded transition-colors"
                                         style={{ color: 'var(--accent)' }}
                                     >
