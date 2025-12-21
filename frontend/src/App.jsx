@@ -15,7 +15,7 @@ import GraphChat from './components/GraphChat';
 import { ThemeProvider, applyThemeToDOM } from './components/ThemeProvider';
 
 function App() {
-    const { graphData, currentWorkspace, currentThread, activeView, setActiveView } = useStore();
+    const { graphData, currentWorkspace, currentThread, activeView, setActiveView, uiSettings } = useStore();
     const hasActiveJobs = useStore(state => state.ingestJobs && state.ingestJobs.length > 0);
     const [selectedNode, setSelectedNode] = useState(null);
 
@@ -38,21 +38,33 @@ function App() {
         );
     }, [highlightedEdges]);
 
-    // Node color function with highlighting
+    // Helper to get CSS variable value
+    const getCSSVar = useCallback((varName) => {
+        return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    }, []);
+
+    // Node color function with highlighting - uses accent color
     const getNodeColor = useCallback((node) => {
         if (highlightedNodeSet.has(node.id)) {
-            return '#22c55e'; // Green for highlighted nodes
+            // Use accent color for highlighted nodes
+            return uiSettings?.accent_color || getCSSVar('--accent') || '#8b5cf6';
         }
         return undefined; // Let auto-color handle it
-    }, [highlightedNodeSet]);
+    }, [highlightedNodeSet, uiSettings?.accent_color, getCSSVar]);
 
-    // Link color function with highlighting
+    // Link color function with highlighting - uses accent and theme colors
     const getLinkColor = useCallback((link) => {
         if (isEdgeHighlighted(link)) {
-            return '#22c55e'; // Green for highlighted edges
+            return uiSettings?.accent_color || getCSSVar('--accent') || '#8b5cf6';
         }
-        return '#4b5563'; // Default gray
-    }, [isEdgeHighlighted]);
+        // Use theme border color for non-highlighted links
+        return getCSSVar('--border-color') || '#374151';
+    }, [isEdgeHighlighted, uiSettings?.accent_color, getCSSVar]);
+
+    // Get background color from theme
+    const graphBgColor = useMemo(() => {
+        return getCSSVar('--bg-primary') || '#0a0a0a';
+    }, [getCSSVar, uiSettings?.theme]);
 
     // Link width function with highlighting
     const getLinkWidth = useCallback((link) => {
@@ -233,7 +245,7 @@ function App() {
                                             nodeRelSize={6}
                                             linkColor={getLinkColor}
                                             linkWidth={getLinkWidth}
-                                            backgroundColor="#000000"
+                                            backgroundColor={graphBgColor}
                                             showNavInfo={false}
                                             width={window.innerWidth - 256}
                                             onNodeClick={handleNodeClick}

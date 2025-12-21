@@ -7,8 +7,17 @@ import ForceGraph2D from 'react-force-graph-2d';
 // ... ConceptGraph component ...
 const ConceptGraph = ({ nodeIds }) => {
     const graphData = useStore(state => state.graphData);
+    const uiSettings = useStore(state => state.uiSettings);
     const containerRef = useRef(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: 300 });
+
+    // Helper to get CSS variable value
+    const getCSSVar = (varName) => {
+        return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    };
+
+    const accentColor = uiSettings?.accent_color || getCSSVar('--accent') || '#8b5cf6';
+    const borderColor = getCSSVar('--border-color') || '#374151';
 
     useEffect(() => {
         if (containerRef.current) {
@@ -47,9 +56,9 @@ const ConceptGraph = ({ nodeIds }) => {
                     height={dimensions.height}
                     graphData={finalGraphData}
                     nodeLabel="id"
-                    nodeColor={() => "#a855f7"} // Purple
+                    nodeColor={() => accentColor}
                     nodeRelSize={6}
-                    linkColor={() => "#4b5563"}
+                    linkColor={() => borderColor}
                     backgroundColor="rgba(0,0,0,0)"
                     cooldownTicks={100}
                 />
