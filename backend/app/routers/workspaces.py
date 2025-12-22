@@ -305,7 +305,7 @@ class IngestUrlRequest(BaseModel):
 @router.post("/{workspace_id}/ingest-url")
 async def ingest_url(workspace_id: str, request: IngestUrlRequest, background_tasks: BackgroundTasks):
     """
-    Ingest a web page URL into the knowledge graph.
+    Ingest a web page or PDF URL into the knowledge graph.
     Used by the Chrome extension for quick ingestion.
     """
     import httpx
@@ -321,46 +321,76 @@ async def ingest_url(workspace_id: str, request: IngestUrlRequest, background_ta
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
         }
         
-        # 1. Download Content
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers) as client:
-            resp = await client.get(request.url)
-            resp.raise_for_status()
-            
-            soup = BeautifulSoup(resp.content, 'html.parser')
-            
-            # Remove scripts and styles
-            for script in soup(["script", "style", "nav", "footer", "header"]):
-                script.decompose()
-                
-            text = soup.get_text(separator="\n")
-            
-            # Clean
-            lines = (line.strip() for line in text.splitlines())
-            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            text = '\n'.join(chunk for chunk in chunks if chunk)
-            
-        if not text:
-            raise HTTPException(status_code=400, detail="Extracted text is empty")
-
-        # 2. Save to Temp
+        # Check if URL is a PDF (by extension, query params, or common patterns)
+        url_lower = request.url.lower()
+        is_pdf = url_lower.endswith('.pdf') or '.pdf?' in url_lower or '/pdf/' in url_lower
+        
+        # Also check content-type for PDFs that don't have .pdf extension
+        if not is_pdf:
+            try:
+                async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers=headers) as client:
+                    head_resp = await client.head(request.url)
+                    content_type = head_resp.headers.get('content-type', '').lower()
+                    is_pdf = 'application/pdf' in content_type
+            except Exception:
+                pass  # If HEAD fails, assume not PDF
+        
+        # Prepare temp directory
         temp_dir = os.path.join(os.getcwd(), "temp", workspace_id)
         os.makedirs(temp_dir, exist_ok=True)
-        
-        # Safe filename
         safe_name = "".join(x for x in request.url.split("//")[-1] if x.isalnum() or x in "-_.")[:50]
-        filename = f"web_{safe_name}_{uuid.uuid4().hex[:6]}.txt"
-        file_path = os.path.join(temp_dir, filename)
         
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(f"URL: {request.url}\n\n{text}")
+        if is_pdf:
+            # PDF: Download the file directly
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True, headers=headers) as client:
+                resp = await client.get(request.url)
+                resp.raise_for_status()
+                
+                filename = f"pdf_{safe_name}_{uuid.uuid4().hex[:6]}.pdf"
+                file_path = os.path.join(temp_dir, filename)
+                
+                with open(file_path, "wb") as f:
+                    f.write(resp.content)
+                    
+                print(f"Downloaded PDF: {file_path} ({len(resp.content)} bytes)")
+        else:
+            # HTML: Extract text content
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers) as client:
+                resp = await client.get(request.url)
+                resp.raise_for_status()
+                
+                soup = BeautifulSoup(resp.content, 'html.parser')
+                
+                # Remove scripts and styles
+                for script in soup(["script", "style", "nav", "footer", "header"]):
+                    script.decompose()
+                    
+                text = soup.get_text(separator="\n")
+                
+                # Clean
+                lines = (line.strip() for line in text.splitlines())
+                chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                text = '\n'.join(chunk for chunk in chunks if chunk)
+                
+            if not text:
+                raise HTTPException(status_code=400, detail="Extracted text is empty")
             
-        # 3. Ingest in background
+            filename = f"web_{safe_name}_{uuid.uuid4().hex[:6]}.txt"
+            file_path = os.path.join(temp_dir, filename)
+            
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(f"URL: {request.url}\n\n{text}")
+            
+        # Ingest in background with appropriate chunk size
         from app.document_processor import process_file
         job_id = str(uuid.uuid4())
         
+        # Use larger chunks for PDFs to reduce total chunk count
+        chunk_size = 6000 if is_pdf else 4000
+        
         async def do_ingest():
             try:
-                await process_file(file_path, workspace_id, chunk_size=4000, job_id=job_id)
+                await process_file(file_path, workspace_id, chunk_size=chunk_size, job_id=job_id)
                 os.remove(file_path)
             except Exception as e:
                 print(f"Ingestion error: {e}")
@@ -372,9 +402,10 @@ async def ingest_url(workspace_id: str, request: IngestUrlRequest, background_ta
         return {
             "status": "started",
             "job_id": job_id,
-            "message": f"Ingesting {request.url}",
+            "message": f"Ingesting {'PDF' if is_pdf else 'page'}: {request.url}",
             "url": request.url,
-            "title": request.title
+            "title": request.title,
+            "is_pdf": is_pdf
         }
         
     except httpx.HTTPStatusError as e:
