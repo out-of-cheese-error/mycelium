@@ -143,15 +143,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const maxContextInput = document.getElementById('maxContextInput');
     const maxContextLabel = document.getElementById('maxContextLabel');
 
-    // Load saved max context setting
+    // Load saved max context setting (in k tokens)
     const { maxContextK } = await chrome.storage.sync.get(['maxContextK']);
     if (maxContextK !== undefined) {
         maxContextInput.value = maxContextK;
         maxContextLabel.textContent = maxContextK + 'k';
     }
 
+    // Get max inline chars from token limit (tokens * 4 = approx chars)
     function getMaxInlineChars() {
-        return (parseInt(maxContextInput.value) || 5) * 1000;
+        return (parseInt(maxContextInput.value) || 5) * 1000 * 4;
     }
 
     // Update label and save when slider changes
@@ -375,91 +376,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         scrollToBottom();
     }
 
-    // Simple markdown renderer
+    // Use marked library for proper markdown rendering
     function renderMarkdown(text) {
         if (!text) return '';
 
-        // Escape HTML
-        let html = text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-
-        // Code blocks (must be first to protect content)
-        const codeBlocks = [];
-        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-            codeBlocks.push(`<pre class="code-block"><code>${code.trim()}</code></pre>`);
-            return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+        // Configure marked for our needs
+        marked.setOptions({
+            breaks: true,  // Convert \n to <br>
+            gfm: true,     // GitHub Flavored Markdown
+            headerIds: false,
+            mangle: false
         });
 
-        // Inline code (protect from other transformations)
-        const inlineCode = [];
-        html = html.replace(/`([^`]+)`/g, (match, code) => {
-            inlineCode.push(`<code class="inline-code">${code}</code>`);
-            return `__INLINE_CODE_${inlineCode.length - 1}__`;
-        });
-
-        // Headers (h1-h4)
-        html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
-        html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-        html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-        html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-        // Blockquotes
-        html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
-
-        // Horizontal rules
-        html = html.replace(/^---$/gm, '<hr>');
-
-        // Unordered lists - convert items and wrap in ul
-        html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
-        html = html.replace(/(<li>[\s\S]*?<\/li>)\n?(<li>)/g, '$1$2'); // Remove newlines between li
-        html = html.replace(/(<li>.*<\/li>)(\n(?!<li>)|$)/g, '</ul>$1'); // Mark end of list
-        html = html.replace(/<\/ul>(<li>)/g, '<ul>$1'); // Add ul at start
-        html = html.replace(/<\/ul>$/g, ''); // Clean up stray end tag
-
-        // Simpler approach: wrap consecutive li elements
-        html = html.replace(/(<li>.*?<\/li>\s*)+/g, (match) => {
-            return '<ul>' + match.replace(/\n/g, '') + '</ul>';
-        });
-
-        // Ordered lists
-        html = html.replace(/^\d+\. (.+)$/gm, '<oli>$1</oli>');
-        html = html.replace(/(<oli>.*?<\/oli>\s*)+/g, (match) => {
-            return '<ol>' + match.replace(/<\/?oli>/g, (m) => m.replace('oli', 'li')).replace(/\n/g, '') + '</ol>';
-        });
-
-        // Bold (do before italic)
-        html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-
-        // Italic
-        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-        // Links
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-
-        // Restore inline code
-        inlineCode.forEach((code, i) => {
-            html = html.replace(`__INLINE_CODE_${i}__`, code);
-        });
-
-        // Restore code blocks
-        codeBlocks.forEach((block, i) => {
-            html = html.replace(`__CODE_BLOCK_${i}__`, block);
-        });
-
-        // Paragraphs: split by double newlines
-        html = html.split(/\n\n+/).map(p => {
-            p = p.trim();
-            // Don't wrap block elements in <p>
-            if (p.startsWith('<h') || p.startsWith('<ul') || p.startsWith('<ol') ||
-                p.startsWith('<pre') || p.startsWith('<blockquote') || p.startsWith('<hr')) {
-                return p;
-            }
-            return p ? `<p>${p.replace(/\n/g, '<br>')}</p>` : '';
-        }).join('');
-
-        return html;
+        return marked.parse(text);
     }
 
     // Scroll to bottom
@@ -488,17 +417,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Update page info display
+    // Approximate tokens from characters (~4 chars per token)
+    function charsToTokens(chars) {
+        return Math.round(chars / 4);
+    }
+
     function updatePageInfo(info) {
         if (!info) {
             pageInfo.textContent = '';
             return;
         }
         const chars = info.length;
+        const tokens = charsToTokens(chars);
+        const tokenDisplay = tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : tokens;
         if (chars > getMaxInlineChars()) {
-            pageInfo.textContent = `${(chars / 1000).toFixed(1)}k chars (will ingest)`;
+            pageInfo.textContent = `~${tokenDisplay} tokens (will ingest)`;
             pageInfo.className = 'page-info';
         } else {
-            pageInfo.textContent = `${(chars / 1000).toFixed(1)}k chars`;
+            pageInfo.textContent = `~${tokenDisplay} tokens`;
             pageInfo.className = 'page-info';
         }
     }
