@@ -215,8 +215,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                     threadSelect.appendChild(option);
                 });
 
-                // Select first thread if exists
-                if (response.data.length > 0) {
+                // Restore previously selected thread for this workspace
+                const storageKey = `selectedThread_${currentWorkspace}`;
+                const stored = await chrome.storage.sync.get([storageKey]);
+                const savedThreadId = stored[storageKey];
+
+                // Check if saved thread still exists in the list
+                const savedThreadExists = savedThreadId && response.data.some(t => t.id === savedThreadId);
+
+                if (savedThreadExists) {
+                    threadSelect.value = savedThreadId;
+                    currentThread = savedThreadId;
+                    await loadMessages();
+                } else if (response.data.length > 0) {
+                    // Fallback to first thread if saved one doesn't exist
                     threadSelect.value = response.data[0].id;
                     currentThread = response.data[0].id;
                     await loadMessages();
@@ -594,6 +606,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     option.textContent = response.data.title;
                     threadSelect.insertBefore(option, threadSelect.firstChild.nextSibling);
                     threadSelect.value = response.data.id;
+
+                    // Save to storage
+                    const storageKey = `selectedThread_${currentWorkspace}`;
+                    chrome.storage.sync.set({ [storageKey]: currentThread });
                 } else {
                     console.error('Failed to create thread:', response.error);
                     return;
@@ -720,9 +736,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Thread change
     threadSelect.addEventListener('change', async () => {
         currentThread = threadSelect.value || null;
+        // Save selected thread for this workspace
+        const storageKey = `selectedThread_${currentWorkspace}`;
         if (currentThread) {
+            chrome.storage.sync.set({ [storageKey]: currentThread });
             await loadMessages();
         } else {
+            chrome.storage.sync.remove(storageKey);
             clearMessages();
         }
         updateInputState();

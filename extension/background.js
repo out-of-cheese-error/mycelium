@@ -323,7 +323,7 @@ async function createWorkspace(workspaceId) {
 async function getThreads(workspaceId) {
     const apiUrl = await getApiUrl();
 
-    const response = await fetch(`${apiUrl}/threads?workspace_id=${workspaceId}`);
+    const response = await fetch(`${apiUrl}/threads/${workspaceId}`);
     if (!response.ok) {
         throw new Error(`Failed to get threads: ${response.statusText}`);
     }
