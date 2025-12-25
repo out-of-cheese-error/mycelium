@@ -1,0 +1,50 @@
+{
+    "manifest_version": 3,
+    "name": "Mycelium",
+    "version": "1.0.0",
+    "description": "Quick content ingestion and chat sidebar for Mycelium knowledge graph",
+    "icons": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+    },
+    "action": {
+        "default_icon": {
+            "16": "icons/icon16.png",
+            "48": "icons/icon48.png"
+        },
+        "default_title": "Mycelium - Click to open chat"
+    },
+    "side_panel": {
+        "default_path": "sidepanel.html"
+    },
+    "background": {
+        "service_worker": "background.js",
+        "type": "module"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "permissions": [
+        "activeTab",
+        "storage",
+        "contextMenus",
+        "sidePanel",
+        "tabs",
+        "scripting"
+    ],
+    "host_permissions": [
+        "http://localhost:8000/*",
+        "http://127.0.0.1:8000/*",
+        "<all_urls>"
+    ],
+    "options_page": "options.html"
+}

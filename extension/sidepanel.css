@@ -1,0 +1,486 @@
+/* Sidepanel-specific styles */
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
+/* Page context toggle */
+.page-context {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.toggle-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.page-info {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.page-info.ingesting {
+    color: var(--accent);
+}
+
+.page-info.ingested {
+    color: var(--success);
+}
+
+.page-info.error {
+    color: var(--error);
+}
+
+/* Ingest Button */
+.btn-ingest {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    margin: 0;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-ingest:hover:not(:disabled) {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+.btn-ingest:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.context-limit {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.context-limit input[type="range"] {
+    width: 100px;
+    height: 4px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.context-limit span {
+    min-width: 28px;
+    text-align: right;
+}
+
+.sidepanel-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 12px;
+    gap: 12px;
+}
+
+/* Header */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+/* Selectors */
+.selectors-container {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.selector-labels {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 4px;
+}
+
+.selector-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.selector-label:first-child {
+    flex: 1;
+    text-align: left;
+}
+
+.selector-label:last-child {
+    flex: 1;
+    text-align: right;
+    padding-right: 28px;
+    /* Account for the + button width */
+}
+
+.selectors {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.selectors select {
+    flex: 1;
+    font-size: 13px;
+    padding: 8px 10px;
+}
+
+/* Ingest Button Container */
+.ingest-container {
+    display: flex;
+    justify-content: center;
+    margin: 4px 0;
+}
+
+/* Messages container */
+.messages-container {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px 0;
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 20px;
+}
+
+.empty-state svg {
+    opacity: 0.5;
+}
+
+.empty-state p {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Message bubbles */
+.message {
+    max-width: 90%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+
+.message-user {
+    align-self: flex-end;
+    background-color: var(--accent);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.message-ai {
+    align-self: flex-start;
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-bottom-left-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.message-content {
+    user-select: text;
+}
+
+.message-tokens {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 10px;
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+.message-ai.streaming::after {
+    content: '▋';
+    animation: blink 1s infinite;
+    margin-left: 2px;
+}
+
+@keyframes blink {
+
+    0%,
+    50% {
+        opacity: 1;
+    }
+
+    51%,
+    100% {
+        opacity: 0;
+    }
+}
+
+/* Markdown in messages */
+.message-ai p {
+    margin: 0 0 8px 0;
+}
+
+.message-ai p:last-child {
+    margin-bottom: 0;
+}
+
+.message-ai code {
+    background-color: var(--bg-elevated);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+}
+
+.message-ai pre {
+    background-color: var(--bg-elevated);
+    padding: 10px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.message-ai pre code {
+    background: none;
+    padding: 0;
+}
+
+.message-ai ul,
+.message-ai ol {
+    margin: 8px 0;
+    padding-left: 24px;
+    display: block;
+}
+
+.message-ai li {
+    margin: 2px 0;
+    padding: 0;
+    line-height: 1.4;
+}
+
+.message-ai strong {
+    font-weight: 600;
+}
+
+.message-ai a {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+.message-ai h1,
+.message-ai h2,
+.message-ai h3,
+.message-ai h4 {
+    font-weight: 600;
+    margin: 12px 0 8px 0;
+    line-height: 1.3;
+}
+
+.message-ai h1 {
+    font-size: 1.3em;
+}
+
+.message-ai h2 {
+    font-size: 1.2em;
+}
+
+.message-ai h3 {
+    font-size: 1.1em;
+}
+
+.message-ai h4 {
+    font-size: 1em;
+    color: var(--text-secondary);
+}
+
+.message-ai blockquote {
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
+    margin: 8px 0;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.message-ai hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 12px 0;
+}
+
+.message-ai .inline-code {
+    background-color: var(--bg-elevated);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 0.9em;
+}
+
+.message-ai .code-block {
+    background-color: var(--bg-elevated);
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.message-ai .code-block code {
+    background: none;
+    padding: 0;
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* Input area */
+.input-area {
+    flex-shrink: 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.input-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 8px 10px;
+    transition: border-color 0.15s ease;
+}
+
+.input-wrapper:focus-within {
+    border-color: var(--accent);
+}
+
+.input-wrapper textarea {
+    flex: 1;
+    border: none;
+    background: transparent;
+    resize: none;
+    font-size: 14px;
+    line-height: 1.4;
+    max-height: 120px;
+    min-height: 20px;
+    padding: 0;
+    color: var(--text-primary);
+    font-family: var(--font-family);
+}
+
+.input-wrapper textarea:focus {
+    outline: none;
+}
+
+.input-wrapper textarea::placeholder {
+    color: var(--text-muted);
+}
+
+.send-btn {
+    background-color: var(--accent);
+    border: none;
+    border-radius: 8px;
+    padding: 8px;
+    cursor: pointer;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.send-btn:hover:not(:disabled) {
+    background-color: var(--accent-hover);
+}
+
+.send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Loading indicator */
+.typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 12px 14px;
+    align-self: flex-start;
+}
+
+.typing-indicator span {
+    width: 8px;
+    height: 8px;
+    background-color: var(--text-muted);
+    border-radius: 50%;
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing {
+
+    0%,
+    60%,
+    100% {
+        transform: translateY(0);
+    }
+
+    30% {
+        transform: translateY(-6px);
+    }
+}

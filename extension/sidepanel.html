@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mycelium Chat</title>
+    <link rel="stylesheet" href="styles/common.css">
+    <link rel="stylesheet" href="sidepanel.css">
+    <script src="vendor/marked.min.js"></script>
+</head>
+
+<body>
+    <div class="sidepanel-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3" />
+                    <path
+                        d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+                <span>Mycelium</span>
+            </div>
+        </header>
+
+        <!-- Workspace & Thread Selectors -->
+        <div class="selectors-container">
+            <div class="selector-labels">
+                <span class="selector-label">Workspace</span>
+                <span class="selector-label">Threads</span>
+            </div>
+            <div class="selectors">
+                <select id="workspaceSelect" title="Workspace">
+                    <option value="">Loading...</option>
+                </select>
+                <button class="btn-icon btn-small" id="newWorkspaceBtn" title="New Workspace">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                </button>
+                <select id="threadSelect" title="Thread">
+                    <option value="">Select thread...</option>
+                </select>
+                <button class="btn-icon btn-small" id="newThreadBtn" title="New Thread">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Ingest Button -->
+        <div class="ingest-container">
+            <button class="btn-ingest" id="ingestBtn" title="Ingest current page">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <span>Ingest page</span>
+            </button>
+        </div>
+
+        <!-- Messages Container -->
+        <div class="messages-container" id="messagesContainer">
+            <div class="empty-state" id="emptyState">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                <p>Start a conversation</p>
+                <span class="text-muted text-sm">Ask anything about your knowledge graph</span>
+            </div>
+        </div>
+
+        <!-- Page Context Toggle -->
+        <div class="page-context" id="pageContext">
+            <label class="toggle-label">
+                <input type="checkbox" id="includePageToggle">
+                <span class="toggle-text">Include page</span>
+            </label>
+            <span class="page-info" id="pageInfo"></span>
+            <div class="context-limit">
+                <input type="range" id="maxContextInput" value="5" min="0" max="100" step="1"
+                    title="Max KB before ingestion">
+                <span id="maxContextLabel">5k</span>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-wrapper">
+                <textarea id="messageInput" placeholder="Ask Mycelium..." rows="1" disabled></textarea>
+                <button class="send-btn" id="sendBtn" disabled title="Send">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13" />
+                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="sidepanel.js"></script>
+</body>
+
+</html>

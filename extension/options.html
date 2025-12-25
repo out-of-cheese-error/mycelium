@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mycelium Settings</title>
+    <link rel="stylesheet" href="styles/common.css">
+    <style>
+        body {
+            padding: 24px;
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        h1 {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-row input {
+            flex: 1;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+
+        .status {
+            margin-top: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <div class="logo">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                    d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+            <span>Mycelium</span>
+        </div>
+    </header>
+
+    <main>
+        <section class="section">
+            <h2 class="section-title">Backend Connection</h2>
+
+            <div class="form-group">
+                <label for="apiUrl">API URL</label>
+                <div class="input-row">
+                    <input type="text" id="apiUrl" placeholder="http://localhost:8000">
+                    <button class="btn btn-secondary" id="testBtn">Test</button>
+                </div>
+                <p class="help-text">The URL where your Mycelium backend is running.</p>
+            </div>
+
+            <div id="status" class="status hidden"></div>
+        </section>
+
+        <section class="section">
+            <button class="btn btn-primary w-full" id="saveBtn">Save Settings</button>
+        </section>
+    </main>
+
+    <script src="options.js"></script>
+</body>
+
+</html>
