@@ -39,6 +39,10 @@ class GraphMemory:
             name="concept_embeddings",
             metadata={"hnsw:space": "cosine"}
         )
+        self.skill_collection = self.chroma_client.get_or_create_collection(
+            name="skill_embeddings",
+            metadata={"hnsw:space": "cosine"}
+        )
 
     def load_graph(self):
         if os.path.exists(self.graph_path):
@@ -171,7 +175,71 @@ class GraphMemory:
                 
         return "\n---\n".join(hits) if hits else "No relevant concepts found."
 
+    # --- Skill Embedding Methods ---
+    def index_skill(self, skill_id: str, title: str, summary: str, explanation: str):
+        """Upserts a skill's embedding based on title and summary for search."""
+        # Embed title + summary for semantic search
+        text = f"Skill: {title}\nSummary: {summary}"
+        embedding = self.embedding_fn.embed_query(text)
+        
+        self.skill_collection.upsert(
+            ids=[skill_id],
+            embeddings=[embedding],
+            documents=[text],
+            metadatas=[{
+                "title": title,
+                "summary": summary,
+                "explanation": explanation  # Store full explanation in metadata
+            }]
+        )
+        
+    def delete_skill_embedding(self, skill_id: str):
+        """Deletes a skill's embedding."""
+        try:
+            self.skill_collection.delete(ids=[skill_id])
+        except:
+            pass
+            
+    def search_skills(self, query: str, k: int = 3) -> str:
+        """
+        Searches skills by semantic similarity and returns the full explanation.
+        Used by the LLM tool to find and apply learned skills.
+        """
+        query_embedding = self.embedding_fn.embed_query(query)
+        results = self.skill_collection.query(
+            query_embeddings=[query_embedding],
+            n_results=k
+        )
+        
+        hits = []
+        if results['ids'] and results['ids'][0]:
+            for i, skill_id in enumerate(results['ids'][0]):
+                meta = results['metadatas'][0][i]
+                title = meta.get('title', 'Unknown')
+                summary = meta.get('summary', '')
+                explanation = meta.get('explanation', '')
+                hits.append(f"### Skill: {title}\n**Summary**: {summary}\n\n**Instructions**:\n{explanation}")
+        
+        return "\n\n---\n\n".join(hits) if hits else "No matching skills found."
+    
+    def get_skill_by_id(self, skill_id: str) -> dict:
+        """Gets a specific skill by ID from the vector store."""
+        try:
+            results = self.skill_collection.get(ids=[skill_id])
+            if results['ids'] and results['ids'][0]:
+                meta = results['metadatas'][0]
+                return {
+                    "id": skill_id,
+                    "title": meta.get('title', ''),
+                    "summary": meta.get('summary', ''),
+                    "explanation": meta.get('explanation', '')
+                }
+        except:
+            pass
+        return None
+
     def add_entity(self, name: str, type: str, description: str):
+
         """Adds or updates an entity in the graph and vector store."""
         
         # Add to Graph

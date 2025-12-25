@@ -883,6 +883,20 @@ def list_expert_workspaces():
     
     return "\n".join(output)
 
+# --- Skill Tools (theWay) ---
+@tool
+def lookup_skill(query: str, workspace_id: str = "default"):
+    """
+    Searches for learned skills matching the query and returns their full instructions.
+    Use this when the user asks you to apply a skill (e.g., "use your email writing skill to...").
+    The returned instructions tell you HOW to perform the skill - follow them carefully.
+    """
+    try:
+        mem = GraphMemory(workspace_id=workspace_id)
+        return mem.search_skills(query)
+    except Exception as e:
+        return f"Skill lookup failed: {e}"
+
 
 tools = [
     DuckDuckGoSearchRun(), create_note, read_note, update_note, list_notes, delete_note, search_notes, 
@@ -895,7 +909,8 @@ tools = [
     check_ingestion_status, ingest_web_page,
     search_biorxiv, read_biorxiv_abstract,
     search_arxiv, read_arxiv_abstract, ingest_arxiv_paper,
-    consult_workspace, list_expert_workspaces
+    consult_workspace, list_expert_workspaces,
+    lookup_skill
 ]
 
 
