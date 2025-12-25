@@ -3,7 +3,7 @@ from langchain_community.document_loaders import TextLoader, PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.messages import HumanMessage
 from app.memory_store import GraphMemory
-from app.agent import get_llm
+from app.llm_config import llm_config
 import re
 import json
 
@@ -106,6 +106,9 @@ async def process_file(file_path: str, workspace_id: str, chunk_size: int = 4800
         count_relations = 0
     
         for i, chunk in enumerate(chunks):
+            # Yield control to event loop - allows pending chat requests to be processed
+            await asyncio.sleep(0.1)  # Small delay to let other async tasks run
+            
             # Check for cancellation
             # Safe get
             stop_signal = False
@@ -137,7 +140,7 @@ async def process_file(file_path: str, workspace_id: str, chunk_size: int = 4800
             """
             
             try:
-                llm = get_llm()
+                llm = llm_config.get_ingestion_llm()
                 
                 # Run LLM in a task so we can monitor cancellation while waiting
                 llm_task = asyncio.create_task(llm.ainvoke([HumanMessage(content=extraction_prompt)]))
@@ -165,12 +168,23 @@ async def process_file(file_path: str, workspace_id: str, chunk_size: int = 4800
                     entities = data.get("entities", [])
                     relations = data.get("relations", [])
                     
+                    # Run blocking embedding operations in thread pool to avoid blocking event loop
                     for entity in entities:
-                        memory.add_entity(entity["name"], entity["type"], entity["description"])
+                        await asyncio.to_thread(
+                            memory.add_entity, 
+                            entity["name"], 
+                            entity["type"], 
+                            entity["description"]
+                        )
                         count_entities += 1
                     
                     for rel in relations:
-                        memory.add_relation(rel["source"], rel["target"], rel["relation"])
+                        await asyncio.to_thread(
+                            memory.add_relation,
+                            rel["source"],
+                            rel["target"],
+                            rel["relation"]
+                        )
                         count_relations += 1
                         
             except Exception as e:

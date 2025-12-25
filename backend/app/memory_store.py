@@ -404,18 +404,40 @@ class GraphMemory:
         if focused_node and self.graph.has_node(focused_node):
             starting_nodes = [focused_node]
         else:
-            # Vector similarity search
-            query_embedding = self.embedding_fn.embed_query(query)
-            results = self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=k
-            )
+            starting_nodes = []
             
-            if not results['ids'][0]:
-                print("DEBUG: No relevant embeddings found.")
+            # 1. Direct text matching on node IDs (like @ mentions in main chat)
+            # This catches exact and partial name matches that vector search might miss
+            query_lower = query.lower()
+            query_words = [w for w in query_lower.split() if len(w) > 2]  # Skip short words like "is", "a", etc.
+            
+            for node_id in self.graph.nodes():
+                node_lower = node_id.lower()
+                # Match if query contains the node name or any query word is in node name
+                if node_lower in query_lower or any(word in node_lower for word in query_words):
+                    starting_nodes.append(node_id)
+            
+            # 2. Vector similarity search
+            try:
+                query_embedding = self.embedding_fn.embed_query(query)
+                results = self.collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=k
+                )
+                
+                if results['ids'] and results['ids'][0]:
+                    for eid in results['ids'][0]:
+                        if self.graph.has_node(eid) and eid not in starting_nodes:
+                            starting_nodes.append(eid)
+            except Exception as e:
+                print(f"Vector search error: {e}")
+            
+            # Limit to k nodes
+            starting_nodes = starting_nodes[:k * 2]  # Allow more since we merged two sources
+            
+            if not starting_nodes:
+                print("DEBUG: No relevant nodes found via text or vector search.")
                 return {"context": "", "retrieved_nodes": [], "retrieved_edges": []}
-            
-            starting_nodes = [eid for eid in results['ids'][0] if self.graph.has_node(eid)]
         
         if not starting_nodes:
             return {"context": "", "retrieved_nodes": [], "retrieved_edges": []}

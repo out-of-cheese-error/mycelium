@@ -63,6 +63,14 @@ const AppSettingsModal = ({ onClose }) => {
         ollama_chat_model: '',
         ollama_embedding_model: '',
         temperature: 0.7,
+        // Ingestion LLM Settings
+        ingestion_llm_enabled: false,
+        ingestion_provider: 'lmstudio',
+        ingestion_base_url: '',
+        ingestion_api_key: '',
+        ingestion_model: '',
+        ingestion_ollama_model: '',
+        // TTS Settings
         tts_base_url: '',
         tts_model: '',
         tts_voice: '',
@@ -95,6 +103,14 @@ const AppSettingsModal = ({ onClose }) => {
                     ollama_base_url: data.ollama_base_url || 'http://localhost:11434',
                     ollama_chat_model: data.ollama_chat_model || '',
                     ollama_embedding_model: data.ollama_embedding_model || '',
+                    // Ingestion LLM Settings
+                    ingestion_llm_enabled: data.ingestion_llm_enabled || false,
+                    ingestion_provider: data.ingestion_provider || 'lmstudio',
+                    ingestion_base_url: data.ingestion_base_url || '',
+                    ingestion_api_key: data.ingestion_api_key || '',
+                    ingestion_model: data.ingestion_model || '',
+                    ingestion_ollama_model: data.ingestion_ollama_model || '',
+                    // TTS Settings
                     tts_base_url: data.tts_base_url || '',
                     tts_model: data.tts_model || '',
                     tts_voice: data.tts_voice || '',
@@ -575,6 +591,122 @@ const AppSettingsModal = ({ onClose }) => {
                                                 />
                                             </div>
                                         </div>
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Ingestion LLM (Optional) */}
+                            <div className="space-y-4 p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h4 className="text-sm font-bold" style={{ color: 'var(--accent)' }}>Ingestion LLM</h4>
+                                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Use a separate model for graph building (optional)</p>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={config.ingestion_llm_enabled}
+                                            onChange={e => setConfig({ ...config, ingestion_llm_enabled: e.target.checked })}
+                                            className="sr-only peer"
+                                        />
+                                        <div
+                                            className="w-11 h-6 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"
+                                            style={{
+                                                backgroundColor: config.ingestion_llm_enabled ? 'var(--accent)' : 'var(--bg-tertiary)',
+                                            }}
+                                        />
+                                    </label>
+                                </div>
+
+                                {config.ingestion_llm_enabled && (
+                                    <>
+                                        <div>
+                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Provider</label>
+                                            <select
+                                                className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                style={{
+                                                    backgroundColor: 'var(--bg-tertiary)',
+                                                    borderColor: 'var(--border-color)',
+                                                    color: 'var(--text-primary)',
+                                                    '--tw-ring-color': 'var(--accent)',
+                                                }}
+                                                value={config.ingestion_provider || 'lmstudio'}
+                                                onChange={e => setConfig({ ...config, ingestion_provider: e.target.value })}
+                                            >
+                                                <option value="ollama">Ollama (Local)</option>
+                                                <option value="lmstudio">LM Studio (Local)</option>
+                                                <option value="openai">OpenAI (Cloud)</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Ollama Ingestion Settings */}
+                                        {config.ingestion_provider === 'ollama' && (
+                                            <div>
+                                                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Ingestion Model</label>
+                                                <input
+                                                    className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                    style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                    value={config.ingestion_ollama_model || ''}
+                                                    onChange={e => setConfig({ ...config, ingestion_ollama_model: e.target.value })}
+                                                    placeholder="llama3.2"
+                                                />
+                                                <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>Uses shared Ollama Base URL</p>
+                                            </div>
+                                        )}
+
+                                        {/* OpenAI/LM Studio Ingestion Settings */}
+                                        {config.ingestion_provider !== 'ollama' && (
+                                            <>
+                                                <div>
+                                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Base URL</label>
+                                                    <input
+                                                        className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                        style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                        value={config.ingestion_base_url || ''}
+                                                        onChange={e => setConfig({ ...config, ingestion_base_url: e.target.value })}
+                                                        placeholder={config.ingestion_provider === 'openai' ? "https://api.openai.com/v1" : "http://localhost:1234/v1"}
+                                                    />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>API Key</label>
+                                                        <input
+                                                            type="password"
+                                                            className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                            style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                            value={config.ingestion_api_key || ''}
+                                                            onChange={e => setConfig({ ...config, ingestion_api_key: e.target.value })}
+                                                            placeholder={config.ingestion_provider === 'openai' ? "sk-..." : "lm-studio"}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Model</label>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                className="flex-1 p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                                value={config.ingestion_model || ''}
+                                                                onChange={e => setConfig({ ...config, ingestion_model: e.target.value })}
+                                                                list="ingestion-model-options"
+                                                                placeholder="Model name..."
+                                                            />
+                                                            <datalist id="ingestion-model-options">
+                                                                {availableModels.map(m => <option key={m} value={m} />)}
+                                                            </datalist>
+                                                            <button
+                                                                onClick={handleFetchModels}
+                                                                disabled={isFetchingModels}
+                                                                className="p-2 rounded border transition-colors"
+                                                                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-muted)' }}
+                                                                title="Fetch Models"
+                                                            >
+                                                                <RefreshCw size={16} className={isFetchingModels ? "animate-spin" : ""} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
                                     </>
                                 )}
                             </div>

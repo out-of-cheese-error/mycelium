@@ -12,6 +12,7 @@ export const useStore = create((set, get) => ({
     messages: [], // Chat messages for current session
     graphData: { nodes: [], links: [] },
     isLoading: false,
+    isUploading: false, // Separate flag for file uploads (doesn't block chat)
     initialLoading: true, // Track initial app loading state
     themeLoaded: false, // Track when theme has been applied
     API_BASE: API_base,
@@ -405,7 +406,7 @@ export const useStore = create((set, get) => ({
         const ws = get().currentWorkspace;
         if (!ws || !files || files.length === 0) return;
 
-        set({ isLoading: true });
+        set({ isUploading: true });
         let pollInterval;
 
         try {
@@ -454,7 +455,7 @@ export const useStore = create((set, get) => ({
             // Keep polling for a bit to ensure status updates clear out or complete
             setTimeout(() => {
                 clearInterval(pollInterval);
-                set({ isLoading: false });
+                set({ isUploading: false });
                 get().checkIngestStatus(); // Final status check
             }, 2000);
         }

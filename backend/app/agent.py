@@ -926,8 +926,9 @@ class AgentState(TypedDict):
 
 # --- Nodes ---
 
-def retrieve_node(state: AgentState):
+async def retrieve_node(state: AgentState):
     """Retrieves relevant context from the graph based on the last user message."""
+    import asyncio
     workspace_id = state.get("workspace_id", "default")
     # Instantiate memory for this workspace
     memory_store = GraphMemory(workspace_id=workspace_id)
@@ -1008,9 +1009,15 @@ def retrieve_node(state: AgentState):
                 if not found_something:
                      print(f"DEBUG: Mention '{name}' (Type: {m_type}) not found.")
 
-        # 2. Vector Search (Standard RAG)
+        # 2. Vector Search (Standard RAG) - run in thread pool to avoid blocking event loop
         try:
-            rag_context = memory_store.retrieve_context(content_text, k=k, depth=depth, include_descriptions=include_descriptions)
+            rag_context = await asyncio.to_thread(
+                memory_store.retrieve_context, 
+                content_text, 
+                k=k, 
+                depth=depth, 
+                include_descriptions=include_descriptions
+            )
         except Exception as e:
             print(f"WARNING: Retrieval failed: {e}")
             rag_context = ""
