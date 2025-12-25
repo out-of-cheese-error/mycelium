@@ -19,7 +19,7 @@ mkdir -p "$OUTPUT_DIR"
 cd "$BACKEND_DIR"
 
 # Install PyInstaller if not present
-pip install pyinstaller
+python -m pip install pyinstaller
 
 # Determine platform suffix for Tauri sidecar naming
 case "$(uname -s)" in

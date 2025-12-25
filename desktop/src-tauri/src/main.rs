@@ -6,11 +6,15 @@
 use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use std::time::Duration;
+use std::sync::Mutex;
 
 #[tauri::command]
 async fn get_backend_url() -> String {
     "http://localhost:8000".to_string()
 }
+
+// Wrapper for the backend process with Mutex for thread-safe access
+struct BackendProcess(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
 fn main() {
     tauri::Builder::default()
@@ -32,8 +36,8 @@ fn main() {
                     .spawn()
                     .expect("Failed to spawn backend sidecar");
                 
-                // Store the child process handle for cleanup
-                app_handle.manage(BackendProcess(Some(child)));
+                // Store the child process handle for cleanup (wrapped in Mutex)
+                app_handle.manage(BackendProcess(Mutex::new(Some(child))));
                 
                 // Log backend output
                 tauri::async_runtime::spawn(async move {
@@ -65,19 +69,27 @@ fn main() {
             
             Ok(())
         })
-        .on_window_event(|_window, event| {
+        .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 println!("Window closing, shutting down backend...");
-                // Backend process will be killed when the app exits
+                
+                // Kill the backend process
+                if let Some(backend) = window.try_state::<BackendProcess>() {
+                    if let Ok(mut guard) = backend.0.lock() {
+                        if let Some(child) = guard.take() {
+                            match child.kill() {
+                                Ok(_) => println!("Backend process killed successfully"),
+                                Err(e) => eprintln!("Failed to kill backend: {}", e),
+                            }
+                        }
+                    }
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![get_backend_url])
         .run(tauri::generate_context!())
         .expect("error while running Mycelium");
 }
-
-#[allow(dead_code)]
-struct BackendProcess(Option<tauri_plugin_shell::process::CommandChild>);
 
 async fn wait_for_backend() {
     let client = reqwest::Client::new();

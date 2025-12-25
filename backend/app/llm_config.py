@@ -107,11 +107,44 @@ class LLMConfig:
         self.save()
     
     def get_data_directory(self) -> str:
-        """Get the configured data directory, with env override for desktop builds.
+        """Get the configured data directory, with special handling for bundled builds.
         
-        Environment variable MYCELIUM_DATA_DIR takes precedence if set.
+        Priority:
+        1. Environment variable MYCELIUM_DATA_DIR (if set)
+        2. Config file data_directory (if absolute path)
+        3. For PyInstaller bundles: ~/Library/Application Support/Mycelium (macOS)
+        4. For development: ./memory_data (relative to working dir)
         """
-        return os.environ.get("MYCELIUM_DATA_DIR", self.config.data_directory)
+        import sys
+        
+        # 1. Environment variable takes highest priority
+        env_dir = os.environ.get("MYCELIUM_DATA_DIR")
+        if env_dir:
+            return env_dir
+        
+        # 2. If config specifies an absolute path, use it
+        if os.path.isabs(self.config.data_directory):
+            return self.config.data_directory
+        
+        # 3. For PyInstaller bundles, use platform-specific user data directory
+        if getattr(sys, 'frozen', False):
+            # Running as compiled bundle
+            if sys.platform == 'darwin':
+                # macOS: ~/Library/Application Support/Mycelium
+                data_dir = os.path.expanduser("~/Library/Application Support/Mycelium")
+            elif sys.platform == 'win32':
+                # Windows: %APPDATA%\Mycelium
+                data_dir = os.path.join(os.environ.get('APPDATA', ''), 'Mycelium')
+            else:
+                # Linux: ~/.local/share/mycelium
+                data_dir = os.path.expanduser("~/.local/share/mycelium")
+            
+            # Create the directory if it doesn't exist
+            os.makedirs(data_dir, exist_ok=True)
+            return data_dir
+        
+        # 4. Development mode: use config value (relative or absolute)
+        return self.config.data_directory
     
     def get_chat_llm(self):
         """Factory method to get the appropriate Chat LLM based on provider."""
