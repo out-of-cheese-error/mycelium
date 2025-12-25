@@ -25,6 +25,7 @@ MyCelium combines the power of LLMs with a knowledge graph to create an AI assis
 - **Emotional State System** - The bot has emotions that evolve based on interactions
 - **Text-to-Speech** - Generate audio lessons from your knowledge
 - **Growth Engine** - Let the bot explore and expand its knowledge autonomously
+- **theWay (Skills)** - Teach the AI reusable skills it can look up and follow
 
 ---
 
@@ -115,6 +116,22 @@ You can add knowledge to your graph in several ways:
 </p>
 
 
+
+### Skills (theWay)
+
+Teach the AI reusable skills that it can look up and follow when prompted:
+
+1. **Create a Skill** - Go to the **theWay** tab (compass icon), click **+**, and define:
+   - **Title**: e.g., "Email Writing"
+   - **Summary**: Brief description for search (e.g., "Professional email format")
+   - **Instructions**: Detailed step-by-step instructions the AI will follow
+
+2. **Use a Skill** - In chat, ask the AI to apply your skill:
+   - *"Use your email writing skill to write an email about the project update"*
+   - *"Apply your code review skill to analyze this function"*
+   - *"Follow your data analysis skill to interpret these numbers"*
+
+The AI will search for matching skills and follow the instructions you provided.
 
 ---
 
@@ -340,7 +357,8 @@ The LangGraph agent has access to various tools:
 - **Wikipedia**: `search_wikipedia`, `ingest_wikipedia_page`
 - **Books**: `search_books`, `search_gutenberg_books`, `ingest_gutenberg_book`
 - **Reddit**: `search_reddit`, `browse_subreddit`, `read_reddit_thread`, `get_reddit_user`
-- **Research**: `search_biorxiv`, `read_biorxiv_abstract`
+- **Research**: `search_biorxiv`, `read_biorxiv_abstract`, `search_arxiv`, `read_arxiv_abstract`, `ingest_arxiv_paper`
 - **Learning**: `generate_lesson`
+- **Skills**: `lookup_skill`
 
 ---

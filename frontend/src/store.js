@@ -584,6 +584,93 @@ export const useStore = create((set, get) => ({
         }
     },
 
+    // --- Skills (theWay) ---
+    skillsList: [],
+    activeSkill: null, // { id, title, summary, explanation, updated_at }
+
+    fetchSkillsList: async (workspaceId) => {
+        const ws = workspaceId || get().currentWorkspace?.id;
+        if (!ws) return;
+        try {
+            const res = await axios.get(`${API_base}/workspaces/${ws}/skills`);
+            set({ skillsList: res.data });
+        } catch (e) {
+            console.error("Fetch skills list failed", e);
+            set({ skillsList: [] });
+        }
+    },
+
+    selectSkill: async (skill) => {
+        const ws = get().currentWorkspace;
+        if (!ws || !skill) return;
+
+        // Optimistically set active skill
+        set({ activeSkill: skill });
+
+        try {
+            const res = await axios.get(`${API_base}/workspaces/${ws.id}/skills/${skill.id}`);
+            set({ activeSkill: res.data });
+        } catch (e) {
+            console.error("Fetch skill content failed", e);
+        }
+    },
+
+    createSkill: async (title = "New Skill", summary = "", explanation = "") => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+
+        try {
+            const res = await axios.post(`${API_base}/workspaces/${ws.id}/skills`, { title, summary, explanation });
+            const newSkill = res.data;
+            set(state => ({
+                skillsList: [newSkill, ...state.skillsList],
+                activeSkill: newSkill
+            }));
+        } catch (e) {
+            console.error("Create skill failed", e);
+        }
+    },
+
+    updateSkill: async (skillId, title, summary, explanation) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+
+        // Optimistic update
+        set(state => ({
+            activeSkill: state.activeSkill?.id === skillId
+                ? { ...state.activeSkill, title, summary, explanation }
+                : state.activeSkill,
+            skillsList: state.skillsList.map(s =>
+                s.id === skillId ? { ...s, title, summary, updated_at: Date.now() / 1000 } : s
+            )
+        }));
+
+        try {
+            await axios.put(`${API_base}/workspaces/${ws.id}/skills/${skillId}`, { title, summary, explanation });
+        } catch (e) {
+            console.error("Update skill failed", e);
+            // Re-fetch to sync
+            get().selectSkill({ id: skillId });
+        }
+    },
+
+    deleteSkill: async (skillId) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+
+        if (!confirm("Delete this skill?")) return;
+
+        try {
+            await axios.delete(`${API_base}/workspaces/${ws.id}/skills/${skillId}`);
+            set(state => ({
+                skillsList: state.skillsList.filter(s => s.id !== skillId),
+                activeSkill: state.activeSkill?.id === skillId ? null : state.activeSkill
+            }));
+        } catch (e) {
+            console.error("Delete skill failed", e);
+        }
+    },
+
     fetchEmotions: async () => {
         const ws = get().currentWorkspace;
         if (!ws) return;

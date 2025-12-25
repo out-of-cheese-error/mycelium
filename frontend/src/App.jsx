@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import ReactMarkdown from 'react-markdown';
-import { Send, Cpu, Share2, MessageSquare, Network, Notebook, BookOpen, Layers, Flame, Route, BrainCircuit, RefreshCw } from 'lucide-react';
+import { Send, Cpu, Share2, MessageSquare, Network, Notebook, BookOpen, Layers, Flame, Route, BrainCircuit, RefreshCw, Compass } from 'lucide-react';
 import { useStore } from './store';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
@@ -12,6 +12,7 @@ import HotTopicsArea from './components/HotTopicsArea';
 import ConnectorsArea from './components/ConnectorsArea';
 import GrowArea from './components/GrowArea';
 import GraphChat from './components/GraphChat';
+import SkillsArea from './components/SkillsArea';
 import { ThemeProvider, applyThemeToDOM } from './components/ThemeProvider';
 
 function App() {
@@ -275,6 +276,15 @@ function App() {
                             >
                                 <BrainCircuit size={14} /> Grow
                             </button>
+                            <button
+                                onClick={() => {
+                                    setActiveView('theWay');
+                                    if (currentWorkspace) useStore.getState().fetchSkillsList(currentWorkspace.id);
+                                }}
+                                className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors ${activeView === 'theWay' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                            >
+                                <Compass size={14} /> theWay
+                            </button>
                         </div>
                     </div >
 
@@ -383,6 +393,11 @@ function App() {
                         {/* GROW VIEW */}
                         < div className={`absolute inset-0 z-10 bg-gray-900 ${activeView === 'grow' ? 'block' : 'hidden'}`}>
                             <GrowArea />
+                        </div >
+
+                        {/* THE WAY (SKILLS) VIEW */}
+                        < div className={`absolute inset-0 z-10 bg-gray-900 ${activeView === 'theWay' ? 'block' : 'hidden'}`}>
+                            <SkillsArea />
                         </div >
 
                         {/* CHAT VIEW (Overlay on top if active) */}

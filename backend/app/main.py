@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from app.agent import app_agent
 from app.memory_store import GraphMemory
-from app.routers import workspaces, threads, system, audio, concepts, hot_topics, connectors, graph_chat
+from app.routers import workspaces, threads, system, audio, concepts, hot_topics, connectors, graph_chat, skills
 import uvicorn
 
 app = FastAPI(title="MyCelium")
@@ -27,6 +27,7 @@ app.include_router(concepts.router)
 app.include_router(hot_topics.router)
 app.include_router(connectors.router)
 app.include_router(graph_chat.router)
+app.include_router(skills.router)
 
 
 # --- MCP Server Lifecycle ---
