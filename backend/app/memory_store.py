@@ -498,15 +498,30 @@ class GraphMemory:
         
     def get_related_nodes(self, topic: str, n: int = 5):
         """Returns n nodes semantically related to the topic."""
-        query_embedding = self.embedding_fn.embed_query(topic)
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n
-        )
+        results_set = set()
         
-        if results['ids'] and results['ids'][0]:
-            return results['ids'][0]
-        return []
+        # 1. First, check for exact or partial name matches in the graph (fast, reliable)
+        topic_lower = topic.lower()
+        for node_id in self.graph.nodes():
+            if topic_lower in node_id.lower():
+                results_set.add(node_id)
+        
+        # 2. Then, do semantic search via ChromaDB
+        try:
+            query_embedding = self.embedding_fn.embed_query(topic)
+            results = self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=n
+            )
+            
+            if results['ids'] and results['ids'][0]:
+                for node_id in results['ids'][0]:
+                    results_set.add(node_id)
+        except Exception as e:
+            print(f"Semantic search failed: {e}")
+        
+        # Return up to n results, prioritizing exact matches
+        return list(results_set)[:n]
 
     def get_random_nodes(self, n: int = 3):
         """Returns n random nodes from the graph."""
@@ -682,12 +697,13 @@ class GraphMemory:
             
         return results
 
-    def get_connectors(self, limit: int = 10, sample_size: int = None):
+    def get_connectors(self, limit: int = 10, sample_size: int = None, normalize: bool = True):
         """
         Returns top nodes sorted by betweenness centrality (connectors).
         :param limit: Number of top nodes to return.
         :param sample_size: Number of nodes to sample for centrality calculation (k). 
                             If None or larger than graph, use full graph.
+        :param normalize: If True, normalize by degree for per-connection bridging score.
         """
         if self.graph.number_of_nodes() == 0:
             return []
@@ -701,8 +717,21 @@ class GraphMemory:
         # k=None means exact, k=int means approximation
         centrality = nx.betweenness_centrality(self.graph, k=k)
         
-        # Sort by centrality (descending)
-        sorted_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)
+        if normalize:
+            # Normalize by degree to get "per-connection bridging score"
+            # This highlights nodes that are efficient bridges relative to their connectivity
+            normalized_centrality = {}
+            for node_id, bc_score in centrality.items():
+                degree = self.graph.degree[node_id]
+                if degree > 0:
+                    normalized_centrality[node_id] = bc_score / degree
+                # Skip nodes with 0 degree (isolated nodes)
+            
+            # Sort by normalized centrality (descending)
+            sorted_nodes = sorted(normalized_centrality.items(), key=lambda x: x[1], reverse=True)
+        else:
+            # Use raw betweenness centrality
+            sorted_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)
         
         # Take top N
         top_nodes = sorted_nodes[:limit]

@@ -97,5 +97,37 @@ async def get_graph(workspace_id: str):
     memory = GraphMemory(workspace_id=workspace_id)
     return memory.get_graph_data()
 
+@app.get("/debug/graph_check/{workspace_id}")
+async def debug_graph_check(workspace_id: str, node_id: str = None):
+    """Debug endpoint to check if a node exists in the graph."""
+    memory = GraphMemory(workspace_id=workspace_id)
+    graph_data = memory.get_graph_data()
+    node_ids_in_graph = [n['id'] for n in graph_data.get('nodes', [])]
+    
+    # Get connectors
+    connectors = memory.get_connectors(limit=20, normalize=False)
+    connector_ids = [c['id'] for c in connectors]
+    
+    # Find mismatches
+    connectors_not_in_graph = [cid for cid in connector_ids if cid not in node_ids_in_graph]
+    
+    result = {
+        "workspace_id": workspace_id,
+        "total_nodes_in_graph_api": len(node_ids_in_graph),
+        "total_nodes_in_networkx": memory.graph.number_of_nodes(),
+        "connectors_not_in_graph_api": connectors_not_in_graph,
+        "graph_path": memory.graph_path,
+    }
+    
+    if node_id:
+        result["node_id_searched"] = node_id
+        result["exists_in_graph_api"] = node_id in node_ids_in_graph
+        result["exists_in_networkx"] = memory.graph.has_node(node_id)
+        # Check for similar names (case insensitive)
+        similar = [n for n in node_ids_in_graph if node_id.lower() in n.lower()]
+        result["similar_nodes"] = similar[:10]
+    
+    return result
+
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

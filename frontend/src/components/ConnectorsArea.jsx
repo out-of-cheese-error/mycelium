@@ -12,6 +12,7 @@ const ConnectorsArea = () => {
     const [showConfig, setShowConfig] = useState(false);
     const [limit, setLimit] = useState(10);
     const [sampleSize, setSampleSize] = useState(50); // Default sample size
+    const [normalize, setNormalize] = useState(true); // Normalize by degree
     const [expandedTopics, setExpandedTopics] = useState({});
 
     const toggleExpand = (id) => {
@@ -26,7 +27,7 @@ const ConnectorsArea = () => {
         setLoading(true);
         try {
             const res = await axios.get(`${API_BASE}/connectors/${currentWorkspace.id}`, {
-                params: { limit, sample_size: sampleSize }
+                params: { limit, sample_size: sampleSize, normalize }
             });
             if (Array.isArray(res.data)) {
                 setConnectors(res.data);
@@ -43,7 +44,7 @@ const ConnectorsArea = () => {
 
     useEffect(() => {
         fetchConnectors();
-    }, [currentWorkspace, limit, sampleSize]);
+    }, [currentWorkspace, limit, sampleSize, normalize]);
 
     if (!currentWorkspace) return null;
 
@@ -122,6 +123,25 @@ const ConnectorsArea = () => {
                             <p className="text-xs text-gray-500 mt-1">
                                 Lower values are faster but less accurate. Use max for full accuracy on small graphs.
                             </p>
+                        </div>
+
+                        <div className="mt-4 flex items-center justify-between">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">
+                                    Normalize by Degree
+                                </label>
+                                <p className="text-xs text-gray-500">
+                                    {normalize ? 'Per-connection bridging score' : 'Raw betweenness centrality'}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setNormalize(!normalize)}
+                                className={`relative w-12 h-6 rounded-full transition-colors ${normalize ? 'bg-indigo-600' : 'bg-gray-600'}`}
+                            >
+                                <span
+                                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${normalize ? 'left-7' : 'left-1'}`}
+                                />
+                            </button>
                         </div>
                     </div>
                 )}
