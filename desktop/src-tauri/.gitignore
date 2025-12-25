@@ -1,0 +1,9 @@
+# Ignore data directories to prevent cargo-watch from triggering rebuilds
+memory_data/
+logs/
+chroma_db/
+temp/
+binaries/
+
+# Ignore target (already default but explicit)
+target/

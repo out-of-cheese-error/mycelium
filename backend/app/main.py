@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from app.agent import app_agent
 from app.memory_store import GraphMemory
-from app.routers import workspaces, threads, system, audio, concepts, hot_topics, connectors, graph_chat, skills
+from app.routers import workspaces, threads, system, audio, concepts, hot_topics, connectors, graph_chat, skills, health
 import uvicorn
 
 app = FastAPI(title="MyCelium")
@@ -19,6 +19,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(health.router)
 app.include_router(workspaces.router)
 app.include_router(threads.router)
 app.include_router(system.router)
@@ -130,4 +131,7 @@ async def debug_graph_check(workspace_id: str, node_id: str = None):
     return result
 
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    import sys
+    # Disable reload when running as PyInstaller bundle (frozen)
+    is_frozen = getattr(sys, 'frozen', False)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=not is_frozen)

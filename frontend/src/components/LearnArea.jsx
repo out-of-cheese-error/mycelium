@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store';
 import { Play, Loader, BookOpen, Mic, PlayCircle, Square, Trash2 } from 'lucide-react';
 import axios from 'axios';
+import { confirm } from './ConfirmModal';
 
 const API_base = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
@@ -38,7 +39,7 @@ const LearnArea = () => {
 
     const handleDelete = async (id, e) => {
         e.stopPropagation();
-        if (confirm("Are you sure you want to delete this lesson?")) {
+        if (await confirm("Are you sure you want to delete this lesson?")) {
             try {
                 if (activeScriptId === id) stopPlayback();
                 await deleteScript(id);

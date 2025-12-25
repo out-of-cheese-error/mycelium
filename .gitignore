@@ -93,3 +93,17 @@ backend/tests/test_memory_data/
 *.tmp
 *.temp
 
+# =========================
+# Tauri
+# =========================
+desktop/src-tauri/target/
+desktop/src-tauri/binaries/
+desktop/src-tauri/gen/
+desktop/src-tauri/memory_data/
+desktop/src-tauri/logs/
+desktop/src-tauri/chroma_db/
+desktop/src-tauri/temp/
+desktop/node_modules/
+
+# Memory data can appear in multiple locations depending on how app is run
+memory_data/

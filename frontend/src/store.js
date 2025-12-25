@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import axios from 'axios';
+import { confirm } from './components/ConfirmModal';
 
 const API_base = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
@@ -78,7 +79,7 @@ export const useStore = create((set, get) => ({
     },
 
     deleteWorkspace: async (id) => {
-        if (!confirm(`Delete workspace ${id}? This cannot be undone.`)) return;
+        if (!await confirm(`Delete workspace ${id}? This cannot be undone.`)) return;
         try {
             await axios.delete(`${API_base}/workspaces/${id}`);
             set(state => ({ workspaces: state.workspaces.filter(w => w.id !== id) }));
@@ -197,7 +198,7 @@ export const useStore = create((set, get) => ({
     },
 
     deleteThread: async (threadId) => {
-        if (!confirm("Delete this chat thread?")) return;
+        if (!await confirm("Delete this chat thread?")) return;
         const ws = get().currentWorkspace;
         if (!ws) return;
 
@@ -572,7 +573,7 @@ export const useStore = create((set, get) => ({
         const ws = get().currentWorkspace;
         if (!ws) return;
 
-        if (!confirm("Delete this note?")) return;
+        if (!await confirm("Delete this note?")) return;
 
         try {
             await axios.delete(`${API_base}/workspaces/${ws.id}/notes/${noteId}`);
@@ -659,7 +660,7 @@ export const useStore = create((set, get) => ({
         const ws = get().currentWorkspace;
         if (!ws) return;
 
-        if (!confirm("Delete this skill?")) return;
+        if (!await confirm("Delete this skill?")) return;
 
         try {
             await axios.delete(`${API_base}/workspaces/${ws.id}/skills/${skillId}`);

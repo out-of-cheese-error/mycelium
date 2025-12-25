@@ -1,0 +1,50 @@
+{
+  "provider": "lmstudio",
+  "embedding_provider": "lmstudio",
+  "chat_base_url": "http://localhost:1234/v1",
+  "chat_api_key": "lm-studio",
+  "chat_model": "qwen/qwen3-vl-30b",
+  "temperature": 0.7,
+  "embedding_base_url": "http://localhost:1234/v1",
+  "embedding_api_key": "lm-studio",
+  "embedding_model": "text-embedding-nomic-embed-text-v1.5",
+  "ollama_base_url": "http://localhost:11434",
+  "ollama_chat_model": "llama3.2",
+  "ollama_embedding_model": "nomic-embed-text",
+  "ingestion_llm_enabled": false,
+  "ingestion_provider": "lmstudio",
+  "ingestion_base_url": "http://localhost:1234/v1",
+  "ingestion_api_key": "lm-studio",
+  "ingestion_model": "",
+  "ingestion_ollama_model": "llama3.2",
+  "tts_base_url": "http://localhost:3000/v1",
+  "tts_model": "tts-1",
+  "tts_voice": "en-Emma_woman",
+  "tts_enabled": true,
+  "reddit_user_agent": "python:graph_chat_agent:v1.0 (public access)",
+  "theme": "dark",
+  "accent_color": "#f59e0b",
+  "font_family": "Inter",
+  "font_size": "md",
+  "mcp_servers": [
+    {
+      "name": "filesystem",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/app"
+      ],
+      "env": {}
+    },
+    {
+      "name": "shell",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@mako10k/mcp-shell-server"
+      ],
+      "env": {}
+    }
+  ]
+}

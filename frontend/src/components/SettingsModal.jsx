@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store';
 import { X, Save, Sparkles, BrainCircuit, RefreshCw, Upload, Download, Globe, Wand2, Settings2, Wrench, Sliders, Database } from 'lucide-react';
+import { confirm } from './ConfirmModal';
 
 const TabButton = ({ active, onClick, icon: Icon, children }) => (
     <button
@@ -562,9 +563,9 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                                         <input
                                             type="file"
                                             ref={fileInputRef}
-                                            onChange={(e) => {
+                                            onChange={async (e) => {
                                                 if (e.target.files?.[0]) {
-                                                    if (confirm("Overwrite current memory with this file? This cannot be undone (a backup will be created).")) {
+                                                    if (await confirm("Overwrite current memory with this file? This cannot be undone (a backup will be created).")) {
                                                         importGraph(e.target.files[0]);
                                                     }
                                                     e.target.value = null;
