@@ -34,6 +34,14 @@ class LLMConfigModel(BaseModel):
     ollama_chat_model: str = "llama3.2"
     ollama_embedding_model: str = "nomic-embed-text"
 
+    # Ingestion LLM Settings (optional, separate LLM for graph building/entity extraction)
+    ingestion_llm_enabled: bool = False  # If False, uses the Chat LLM for ingestion
+    ingestion_provider: Literal["openai", "ollama", "lmstudio"] = "lmstudio"
+    ingestion_base_url: str = "http://localhost:1234/v1"
+    ingestion_api_key: str = "lm-studio"
+    ingestion_model: str = ""
+    ingestion_ollama_model: str = "llama3.2"  # Used when ingestion_provider is "ollama"
+
     # TTS Settings
     tts_base_url: str = "http://localhost:3000/v1"
     tts_model: str = "tts-1"
@@ -134,6 +142,33 @@ class LLMConfig:
                 api_key=cfg.embedding_api_key,
                 model=cfg.embedding_model,
                 check_embedding_ctx_length=False
+            )
+    
+    def get_ingestion_llm(self):
+        """Factory method to get the LLM for ingestion/graph building.
+        
+        If ingestion_llm_enabled is False, falls back to the chat LLM.
+        """
+        cfg = self.config
+        
+        if not cfg.ingestion_llm_enabled:
+            return self.get_chat_llm()
+        
+        if cfg.ingestion_provider == "ollama":
+            from langchain_ollama import ChatOllama
+            return ChatOllama(
+                model=cfg.ingestion_ollama_model,
+                base_url=cfg.ollama_base_url,
+                temperature=0.3  # Lower temperature for more consistent extraction
+            )
+        else:
+            # Works for both "openai" and "lmstudio" (OpenAI-compatible APIs)
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI(
+                base_url=cfg.ingestion_base_url,
+                api_key=cfg.ingestion_api_key,
+                model=cfg.ingestion_model,
+                temperature=0.3  # Lower temperature for more consistent extraction
             )
 
 llm_config = LLMConfig()
