@@ -73,6 +73,9 @@ class LLMConfigModel(BaseModel):
         )
     ]
 
+    # Data Storage Settings
+    data_directory: str = "./memory_data"  # Base directory for workspaces, notes, and configs
+
 class LLMConfig:
     _instance = None
 
@@ -102,6 +105,13 @@ class LLMConfig:
     def update_config(self, new_config: LLMConfigModel):
         self.config = new_config
         self.save()
+    
+    def get_data_directory(self) -> str:
+        """Get the configured data directory, with env override for desktop builds.
+        
+        Environment variable MYCELIUM_DATA_DIR takes precedence if set.
+        """
+        return os.environ.get("MYCELIUM_DATA_DIR", self.config.data_directory)
     
     def get_chat_llm(self):
         """Factory method to get the appropriate Chat LLM based on provider."""

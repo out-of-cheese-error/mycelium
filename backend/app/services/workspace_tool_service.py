@@ -6,12 +6,13 @@ consulted by other workspaces.
 """
 import os
 import json
-from app.memory_store import GraphMemory
+from app.memory_store import GraphMemory, get_memory_base_dir
 from app.llm_config import llm_config
 from langchain_core.messages import HumanMessage
 from app.services.concept_service import ConceptService
 
-MEMORY_BASE_DIR = "./memory_data"
+# Set at import time from config (restart required for changes)
+MEMORY_BASE_DIR = get_memory_base_dir()
 
 
 def get_config_path(workspace_id: str):

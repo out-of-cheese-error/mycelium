@@ -6,12 +6,14 @@ import json
 import uuid
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from app.agent import app_agent
+from app.memory_store import get_memory_base_dir
 
 from datetime import datetime
 
 router = APIRouter(prefix="/threads", tags=["threads"])
 
-MEMORY_BASE_DIR = "./memory_data"
+# Set at import time from config (restart required for changes)
+MEMORY_BASE_DIR = get_memory_base_dir()
 
 class Thread(BaseModel):
     id: str

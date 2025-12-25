@@ -5,14 +5,15 @@ import os
 import shutil
 import json
 import uuid
-from app.memory_store import GraphMemory
+from app.memory_store import GraphMemory, get_memory_base_dir
 from app.llm_config import llm_config
 from datetime import datetime
 # Postponing import of document_processor to avoid circular deps if any, but should be fine.
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
-MEMORY_BASE_DIR = "./memory_data"
+# Set at import time from config (restart required for changes to take effect)
+MEMORY_BASE_DIR = get_memory_base_dir()
 
 class Workspace(BaseModel):
     id: str

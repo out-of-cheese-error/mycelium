@@ -82,6 +82,8 @@ const AppSettingsModal = ({ onClose }) => {
         font_size: 'md',
         // MCP Servers
         mcp_servers: [],
+        // Data Storage
+        data_directory: './memory_data',
     });
 
     const [isLoading, setIsLoading] = useState(true);
@@ -122,6 +124,8 @@ const AppSettingsModal = ({ onClose }) => {
                     font_family: data.font_family || 'Inter',
                     font_size: data.font_size || 'md',
                     mcp_servers: data.mcp_servers || [],
+                    // Data Storage
+                    data_directory: data.data_directory || './memory_data',
                 });
             }
             setIsLoading(false);
@@ -727,6 +731,28 @@ const AppSettingsModal = ({ onClose }) => {
                                     value={config.temperature || 0.7}
                                     onChange={e => setConfig({ ...config, temperature: parseFloat(e.target.value) })}
                                 />
+                            </div>
+
+                            {/* Data Directory */}
+                            <div className="space-y-4 p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                <div>
+                                    <h4 className="text-sm font-bold" style={{ color: 'var(--accent)' }}>Data Storage</h4>
+                                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Location for workspaces, graphs, and notes</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Data Directory</label>
+                                    <input
+                                        className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                        style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                        value={config.data_directory || ''}
+                                        onChange={e => setConfig({ ...config, data_directory: e.target.value })}
+                                        placeholder="./memory_data"
+                                    />
+                                    <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                                        ⚠️ Requires backend restart for changes to take effect.
+                                        Existing data will not be migrated automatically.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     )}

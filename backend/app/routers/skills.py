@@ -5,11 +5,12 @@ import os
 import json
 import uuid
 import time
-from app.memory_store import GraphMemory
+from app.memory_store import GraphMemory, get_memory_base_dir
 
 router = APIRouter(prefix="/workspaces", tags=["skills"])
 
-MEMORY_BASE_DIR = "./memory_data"
+# Set at import time from config (restart required for changes)
+MEMORY_BASE_DIR = get_memory_base_dir()
 
 
 class Skill(BaseModel):

@@ -7,13 +7,19 @@ import os
 import uuid
 from app.llm_config import llm_config
 
+def get_memory_base_dir():
+    """Get the base directory for memory data from config."""
+    return llm_config.get_data_directory()
+
+# Keep for backward compatibility, but prefer get_memory_base_dir()
 MEMORY_BASE_DIR = "./memory_data"
 
 class GraphMemory:
-    def __init__(self, workspace_id: str = "default", base_dir: str = "./memory_data"):
+    def __init__(self, workspace_id: str = "default", base_dir: str = None):
         self.workspace_id = workspace_id
-        self.base_dir = base_dir
-        self.workspace_dir = os.path.join(base_dir, workspace_id)
+        # Use provided base_dir, or get from config
+        self.base_dir = base_dir if base_dir else get_memory_base_dir()
+        self.workspace_dir = os.path.join(self.base_dir, workspace_id)
         os.makedirs(self.workspace_dir, exist_ok=True)
         
         # 1. Initialize Graph
