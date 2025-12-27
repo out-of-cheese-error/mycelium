@@ -77,7 +77,7 @@ const FONT_SIZES = {
 };
 
 export const applyThemeToDOM = (settings) => {
-    const { theme = 'dark', accent_color = '#8b5cf6', font_family = 'Inter', font_size = 'md' } = settings;
+    const { theme = 'dark', accent_color = '#8b5cf6', font_family = 'Inter', font_size = 'md', colorful_markdown = false } = settings;
 
     const root = document.documentElement;
 
@@ -91,6 +91,29 @@ export const applyThemeToDOM = (settings) => {
     root.style.setProperty('--accent', accent_color);
     root.style.setProperty('--accent-hover', adjustColor(accent_color, -20));
     root.style.setProperty('--accent-muted', accent_color + '40');
+
+    // Apply markdown colors (colorful or neutral)
+    if (colorful_markdown) {
+        const palette = computeColorPalette(accent_color);
+        root.style.setProperty('--md-heading', palette.heading);
+        root.style.setProperty('--md-bold', palette.bold);
+        root.style.setProperty('--md-italic', palette.italic);
+        root.style.setProperty('--md-link', palette.link);
+        root.style.setProperty('--md-code-bg', palette.code + '30'); // With transparency
+        root.style.setProperty('--md-code-text', palette.code);
+        root.style.setProperty('--md-list-marker', palette.listMarker);
+        root.style.setProperty('--md-blockquote', palette.blockquote);
+    } else {
+        // Neutral/muted colors when disabled
+        root.style.setProperty('--md-heading', 'var(--text-primary)');
+        root.style.setProperty('--md-bold', 'inherit');
+        root.style.setProperty('--md-italic', 'inherit');
+        root.style.setProperty('--md-link', 'var(--accent)');
+        root.style.setProperty('--md-code-bg', 'rgba(0,0,0,0.2)');
+        root.style.setProperty('--md-code-text', 'var(--text-secondary)');
+        root.style.setProperty('--md-list-marker', 'var(--text-muted)');
+        root.style.setProperty('--md-blockquote', 'var(--text-muted)');
+    }
 
     // Apply font family
     const fontStack = font_family === 'system'
@@ -112,6 +135,62 @@ function adjustColor(hex, amount) {
     const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amount));
     const b = Math.min(255, Math.max(0, (num & 0x0000FF) + amount));
     return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1)}`;
+}
+
+// Convert hex to HSL
+function hexToHsl(hex) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = (num >> 16) / 255;
+    const g = ((num >> 8) & 0x00FF) / 255;
+    const b = (num & 0x0000FF) / 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+
+    if (max === min) {
+        h = s = 0;
+    } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+            case g: h = ((b - r) / d + 2) / 6; break;
+            case b: h = ((r - g) / d + 4) / 6; break;
+        }
+    }
+    return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+// Convert HSL to hex
+function hslToHex(h, s, l) {
+    s /= 100;
+    l /= 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => {
+        const k = (n + h / 30) % 12;
+        const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+        return Math.round(255 * color).toString(16).padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+// Generate harmonious color palette from accent color
+function computeColorPalette(accentHex) {
+    const hsl = hexToHsl(accentHex);
+
+    // Generate unique color for each markdown element using hue rotation
+    const colors = {
+        heading: accentHex, // Base accent for headers
+        bold: hslToHex((hsl.h + 15) % 360, Math.min(hsl.s + 5, 100), Math.min(hsl.l + 5, 85)), // Slight shift for bold
+        italic: hslToHex((hsl.h + 45) % 360, Math.min(hsl.s, 90), Math.min(hsl.l + 10, 85)), // Analogous for italic
+        link: hslToHex((hsl.h + 60) % 360, Math.min(hsl.s + 10, 100), Math.min(hsl.l + 10, 85)), // Analogous for links
+        code: hslToHex((hsl.h + 180) % 360, Math.max(hsl.s - 20, 40), Math.min(hsl.l + 15, 80)), // Complementary for code
+        listMarker: hslToHex((hsl.h + 90) % 360, hsl.s, Math.min(hsl.l + 5, 80)), // Triadic for lists
+        blockquote: hslToHex((hsl.h + 270) % 360, Math.max(hsl.s - 20, 40), Math.min(hsl.l + 15, 75)), // Split-complementary for blockquotes
+    };
+
+    return colors;
 }
 
 export const ThemeProvider = ({ children }) => {

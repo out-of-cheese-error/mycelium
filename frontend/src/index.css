@@ -30,6 +30,16 @@
   --font-size-base: 1rem;
   --font-size-lg: 1.125rem;
   --font-size-xl: 1.25rem;
+
+  /* Markdown colors (default neutral, colorful mode overrides via JS) */
+  --md-heading: #f9fafb;
+  --md-bold: inherit;
+  --md-italic: inherit;
+  --md-link: #8b5cf6;
+  --md-code-bg: rgba(0, 0, 0, 0.2);
+  --md-code-text: #e5e7eb;
+  --md-list-marker: #9ca3af;
+  --md-blockquote: #9ca3af;
 }
 
 /* Apply theme to base elements - use * to catch everything */

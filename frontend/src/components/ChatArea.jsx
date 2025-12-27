@@ -248,11 +248,21 @@ const ChatMessage = React.memo(({ role, content, index, isPlaying, isLoadingAudi
             <div className={`relative max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed select-text ${role === 'user' ? 'bg-blue-600/90 text-white rounded-br-none' : 'bg-gray-800 text-gray-200 rounded-bl-none border border-gray-700'}`}>
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                     p: ({ node, ...props }) => <p className="mb-2 last:mb-0 select-text" {...props} />,
-                    a: ({ node, ...props }) => <a className="underline decoration-white/30 hover:decoration-white transition-all font-semibold" {...props} />,
-                    ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
-                    ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
-                    code: ({ node, inline, ...props }) => inline ? <code className="bg-black/20 px-1 py-0.5 rounded text-xs font-mono select-text" {...props} /> : <code className="text-xs font-mono bg-transparent select-text" {...props} />,
-                    pre: ({ node, ...props }) => <pre className="bg-black/30 p-2 rounded-lg my-2 overflow-x-auto select-text" {...props} />,
+                    h1: ({ node, ...props }) => <h1 className="text-xl font-bold mb-2 select-text" style={{ color: 'var(--md-heading)' }} {...props} />,
+                    h2: ({ node, ...props }) => <h2 className="text-lg font-bold mb-2 select-text" style={{ color: 'var(--md-heading)' }} {...props} />,
+                    h3: ({ node, ...props }) => <h3 className="text-base font-bold mb-2 select-text" style={{ color: 'var(--md-heading)' }} {...props} />,
+                    h4: ({ node, ...props }) => <h4 className="text-sm font-bold mb-2 select-text" style={{ color: 'var(--md-heading)' }} {...props} />,
+                    strong: ({ node, ...props }) => <strong className="font-bold" style={{ color: 'var(--md-bold)' }} {...props} />,
+                    em: ({ node, ...props }) => <em className="italic" style={{ color: 'var(--md-italic)' }} {...props} />,
+                    a: ({ node, ...props }) => <a className="underline decoration-current/30 hover:decoration-current transition-all font-semibold" style={{ color: 'var(--md-link)' }} {...props} />,
+                    ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" style={{ color: 'var(--md-list-marker)' }} {...props} />,
+                    ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" style={{ color: 'var(--md-list-marker)' }} {...props} />,
+                    li: ({ node, ...props }) => <li className="select-text" style={{ color: 'var(--text-secondary)' }} {...props} />,
+                    code: ({ node, inline, ...props }) => inline
+                        ? <code className="px-1 py-0.5 rounded text-xs font-mono select-text" style={{ backgroundColor: 'var(--md-code-bg)', color: 'var(--md-code-text)' }} {...props} />
+                        : <code className="text-xs font-mono bg-transparent select-text" {...props} />,
+                    pre: ({ node, ...props }) => <pre className="p-2 rounded-lg my-2 overflow-x-auto select-text" style={{ backgroundColor: 'var(--md-code-bg)' }} {...props} />,
+                    blockquote: ({ node, ...props }) => <blockquote className="border-l-2 pl-3 my-2 italic" style={{ borderColor: 'var(--md-blockquote)', color: 'var(--md-blockquote)' }} {...props} />,
                     img: ({ node, ...props }) => <img className="rounded-lg max-w-full max-h-80 object-contain my-2 bg-black/50" {...props} />,
                 }}>
                     {mainContent}

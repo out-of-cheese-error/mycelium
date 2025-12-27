@@ -27,6 +27,7 @@ export const useStore = create((set, get) => ({
         accent_color: '#8b5cf6',
         font_family: 'Inter',
         font_size: 'md',
+        colorful_markdown: false,
     },
     setUiSettings: (settings) => set({ uiSettings: settings }),
 
@@ -727,6 +728,7 @@ export const useStore = create((set, get) => ({
                         accent_color: data.accent_color || '#8b5cf6',
                         font_family: data.font_family || 'Inter',
                         font_size: data.font_size || 'md',
+                        colorful_markdown: data.colorful_markdown || false,
                     }
                 });
             }

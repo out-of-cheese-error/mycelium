@@ -56,6 +56,7 @@ class LLMConfigModel(BaseModel):
     accent_color: str = "#8b5cf6"  # purple accent
     font_family: str = "Inter"  # Inter, Roboto, Source Code Pro, system
     font_size: str = "md"  # sm, md, lg
+    colorful_markdown: bool = False  # colorful markdown elements in chat
 
     # MCP (Model Context Protocol) Servers
     mcp_servers: List[MCPServerConfig] = [
