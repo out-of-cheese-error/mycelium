@@ -5,8 +5,8 @@ import { useStore } from '../store';
 import {
     Save, Edit2, Plus, Trash2, FileText, Bold, Italic, List, ListOrdered,
     Heading1, Heading2, Heading3, Code, Link, Table, Quote, Strikethrough,
-    Minus, CheckSquare, Maximize2, Minimize2, Eye, EyeOff, X, Check, Loader2,
-    Undo2, Redo2
+    Minus, CheckSquare, Eye, EyeOff, X, Check, Loader2,
+    Undo2, Redo2, Columns, Square
 } from 'lucide-react';
 
 // Toast notification component
@@ -138,7 +138,7 @@ const NotesArea = () => {
     const [editTitle, setEditTitle] = useState("");
     const [saveStatus, setSaveStatus] = useState('saved');
     const [showPreview, setShowPreview] = useState(true);
-    const [focusMode, setFocusMode] = useState(false);
+    const [fullPreview, setFullPreview] = useState(false);
     const [toast, setToast] = useState(null);
     const textareaRef = useRef(null);
     const previewRef = useRef(null);
@@ -223,16 +223,7 @@ const NotesArea = () => {
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [saveStatus]);
 
-    // Escape key to exit focus mode
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (e.key === 'Escape' && focusMode) {
-                setFocusMode(false);
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [focusMode]);
+
 
     // Autosave with debounce
     const triggerAutosave = useCallback(() => {
@@ -429,15 +420,11 @@ const NotesArea = () => {
         );
     }
 
-    const editorContainerClass = focusMode
-        ? "fixed inset-0 z-40 bg-gray-900 flex flex-col"
-        : "flex h-full bg-gray-900 text-gray-300";
-
     return (
         <>
-            <div className={editorContainerClass}>
+            <div className="flex h-full bg-gray-900 text-gray-300">
                 {/* MAIN EDITOR AREA */}
-                <div className={`flex-1 flex flex-col ${focusMode ? '' : 'border-r border-gray-800'}`}>
+                <div className="flex-1 flex flex-col border-r border-gray-800">
                     {activeNote ? (
                         <>
                             {/* Header */}
@@ -461,13 +448,15 @@ const NotesArea = () => {
                                     >
                                         {showPreview ? <Eye size={16} /> : <EyeOff size={16} />}
                                     </button>
-                                    <button
-                                        onClick={() => setFocusMode(!focusMode)}
-                                        className="p-2 text-gray-400 hover:bg-gray-800 rounded-lg transition-colors"
-                                        title={focusMode ? 'Exit Focus Mode (Esc)' : 'Focus Mode'}
-                                    >
-                                        {focusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                                    </button>
+                                    {showPreview && (
+                                        <button
+                                            onClick={() => setFullPreview(!fullPreview)}
+                                            className={`p-2 rounded-lg transition-colors ${fullPreview ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800'}`}
+                                            title={fullPreview ? 'Split View' : 'Full Preview'}
+                                        >
+                                            {fullPreview ? <Columns size={16} /> : <Square size={16} />}
+                                        </button>
+                                    )}
                                     <button
                                         onClick={handleSave}
                                         disabled={saveStatus === 'saved'}
@@ -493,38 +482,43 @@ const NotesArea = () => {
 
                             {/* Editor + Preview Split */}
                             <div className="flex-1 flex overflow-hidden">
-                                {/* Editor Pane */}
-                                <div className={`flex flex-col ${showPreview ? 'w-1/2 border-r border-gray-700' : 'w-full'}`}>
-                                    <textarea
-                                        ref={textareaRef}
-                                        className="flex-1 w-full bg-gray-900 text-white p-4 
-                                                 focus:outline-none font-mono text-sm leading-relaxed resize-none overflow-auto"
-                                        value={editContent}
-                                        onChange={(e) => setEditContent(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                        onScroll={(e) => {
-                                            if (isScrolling.current || !previewRef.current) return;
-                                            isScrolling.current = true;
-                                            const textarea = e.target;
-                                            const scrollPercentage = textarea.scrollTop / (textarea.scrollHeight - textarea.clientHeight);
-                                            const previewEl = previewRef.current;
-                                            previewEl.scrollTop = scrollPercentage * (previewEl.scrollHeight - previewEl.clientHeight);
-                                            setTimeout(() => { isScrolling.current = false; }, 50);
-                                        }}
-                                        placeholder="Start writing in Markdown..."
-                                        spellCheck="false"
-                                    />
-                                    {/* Footer with word count */}
-                                    <div className="px-4 py-2 border-t border-gray-800 bg-gray-900/50">
-                                        <WordCount content={editContent} />
+                                {/* Editor Pane - hidden in full preview mode */}
+                                {!fullPreview && (
+                                    <div className={`flex flex-col ${showPreview ? 'w-1/2 border-r border-gray-700' : 'w-full'}`}>
+                                        <textarea
+                                            ref={textareaRef}
+                                            className="flex-1 w-full bg-gray-900 text-white p-4 
+                                                     focus:outline-none font-mono text-sm leading-relaxed resize-none 
+                                                     scrollbar-visible"
+                                            style={{ overflowY: 'scroll' }}
+                                            value={editContent}
+                                            onChange={(e) => setEditContent(e.target.value)}
+                                            onKeyDown={handleKeyDown}
+                                            onScroll={(e) => {
+                                                if (isScrolling.current || !previewRef.current) return;
+                                                isScrolling.current = true;
+                                                const textarea = e.target;
+                                                const scrollPercentage = textarea.scrollTop / (textarea.scrollHeight - textarea.clientHeight);
+                                                const previewEl = previewRef.current;
+                                                previewEl.scrollTop = scrollPercentage * (previewEl.scrollHeight - previewEl.clientHeight);
+                                                setTimeout(() => { isScrolling.current = false; }, 50);
+                                            }}
+                                            placeholder="Start writing in Markdown..."
+                                            spellCheck="false"
+                                        />
+                                        {/* Footer with word count */}
+                                        <div className="px-4 py-2 border-t border-gray-800 bg-gray-900/50">
+                                            <WordCount content={editContent} />
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
                                 {/* Preview Pane */}
                                 {showPreview && (
-                                    <div className="w-1/2 flex flex-col bg-gray-850">
-                                        <div className="px-4 py-2 text-xs text-gray-500 border-b border-gray-800 bg-gray-800/50">
-                                            PREVIEW
+                                    <div className={`${fullPreview ? 'w-full' : 'w-1/2'} flex flex-col bg-gray-850`}>
+                                        <div className="px-4 py-2 text-xs text-gray-500 border-b border-gray-800 bg-gray-800/50 flex justify-between items-center">
+                                            <span>PREVIEW</span>
+                                            {fullPreview && <WordCount content={editContent} />}
                                         </div>
                                         <div
                                             ref={previewRef}
@@ -600,61 +594,59 @@ const NotesArea = () => {
                     )}
                 </div>
 
-                {/* SIDEBAR (Right) - Hidden in focus mode */}
-                {!focusMode && (
-                    <div className="w-64 bg-gray-900 border-l border-gray-800 flex flex-col">
-                        <div className="p-4 border-b border-gray-800 flex justify-between items-center">
-                            <span className="font-semibold text-gray-400 text-sm">NOTES</span>
-                            <button
-                                onClick={handleCreate}
-                                className="p-1.5 hover:bg-gray-800 rounded-lg text-blue-400 transition-colors"
-                                title="Create Note"
-                            >
-                                <Plus size={18} />
-                            </button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto">
-                            {notesList.length === 0 ? (
-                                <div className="p-4 text-center text-xs text-gray-600">
-                                    <FileText size={24} className="mx-auto mb-2 text-gray-700" />
-                                    <p>No notes yet.</p>
-                                    <p className="mt-1">Click + to create one.</p>
-                                </div>
-                            ) : (
-                                notesList.map(note => (
-                                    <div
-                                        key={note.id}
-                                        onClick={() => selectNote(note)}
-                                        className={`p-3 border-b border-gray-800 cursor-pointer transition-all duration-150 group relative
-                                                  ${activeNote?.id === note.id
-                                                ? 'bg-gray-800 border-l-2 border-l-blue-500'
-                                                : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'}`}
-                                    >
-                                        <div className="font-medium text-gray-300 text-sm truncate pr-6">
-                                            {note.title || "Untitled"}
-                                        </div>
-                                        <div className="text-xs text-gray-500 mt-1">
-                                            {new Date((note.updated_at || 0) * 1000).toLocaleDateString()}
-                                        </div>
-
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDelete(note.id);
-                                            }}
-                                            className="absolute right-2 top-3 p-1 text-gray-600 hover:text-red-400 
-                                                     opacity-0 group-hover:opacity-100 transition-all duration-150"
-                                            title="Delete note"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </div>
-                                ))
-                            )}
-                        </div>
+                {/* SIDEBAR (Right) */}
+                <div className="w-64 bg-gray-900 border-l border-gray-800 flex flex-col">
+                    <div className="p-4 border-b border-gray-800 flex justify-between items-center">
+                        <span className="font-semibold text-gray-400 text-sm">NOTES</span>
+                        <button
+                            onClick={handleCreate}
+                            className="p-1.5 hover:bg-gray-800 rounded-lg text-blue-400 transition-colors"
+                            title="Create Note"
+                        >
+                            <Plus size={18} />
+                        </button>
                     </div>
-                )}
+
+                    <div className="flex-1 overflow-y-auto">
+                        {notesList.length === 0 ? (
+                            <div className="p-4 text-center text-xs text-gray-600">
+                                <FileText size={24} className="mx-auto mb-2 text-gray-700" />
+                                <p>No notes yet.</p>
+                                <p className="mt-1">Click + to create one.</p>
+                            </div>
+                        ) : (
+                            notesList.map(note => (
+                                <div
+                                    key={note.id}
+                                    onClick={() => selectNote(note)}
+                                    className={`p-3 border-b border-gray-800 cursor-pointer transition-all duration-150 group relative
+                                                  ${activeNote?.id === note.id
+                                            ? 'bg-gray-800 border-l-2 border-l-blue-500'
+                                            : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'}`}
+                                >
+                                    <div className="font-medium text-gray-300 text-sm truncate pr-6">
+                                        {note.title || "Untitled"}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                        {new Date((note.updated_at || 0) * 1000).toLocaleDateString()}
+                                    </div>
+
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDelete(note.id);
+                                        }}
+                                        className="absolute right-2 top-3 p-1 text-gray-600 hover:text-red-400 
+                                                     opacity-0 group-hover:opacity-100 transition-all duration-150"
+                                        title="Delete note"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Toast Notifications */}
@@ -666,7 +658,7 @@ const NotesArea = () => {
                 />
             )}
 
-            {/* Global styles for animations */}
+            {/* Global styles for animations and scrollbar */}
             <style>{`
                 @keyframes slide-up {
                     from {
@@ -680,6 +672,26 @@ const NotesArea = () => {
                 }
                 .animate-slide-up {
                     animation: slide-up 0.2s ease-out;
+                }
+                /* Ensure scrollbar is always visible */
+                .scrollbar-visible {
+                    scrollbar-width: auto;
+                    scrollbar-color: #4b5563 #1f2937;
+                }
+                .scrollbar-visible::-webkit-scrollbar {
+                    width: 10px;
+                    height: 10px;
+                }
+                .scrollbar-visible::-webkit-scrollbar-track {
+                    background: #1f2937;
+                    border-radius: 5px;
+                }
+                .scrollbar-visible::-webkit-scrollbar-thumb {
+                    background: #4b5563;
+                    border-radius: 5px;
+                }
+                .scrollbar-visible::-webkit-scrollbar-thumb:hover {
+                    background: #6b7280;
                 }
             `}</style>
         </>
