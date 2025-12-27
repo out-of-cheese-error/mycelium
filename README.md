@@ -16,7 +16,7 @@ MyCelium combines the power of LLMs with a knowledge graph to create an AI assis
 
 - **Knowledge Graph Memory** - Automatically extracts entities and relationships from conversations using NetworkX and ChromaDB
 - **Multi-Source Ingestion** - Import knowledge from Wikipedia, Project Gutenberg, bioRxiv, web pages, and more
-- **Interactive Graph Visualization** - Explore your knowledge graph with a force-directed 2D visualization
+- **Interactive Graph Visualization** - Explore and chat with your knowledge graph directly with a force-directed 2D visualization
 - **Multiple Workspaces** - Create isolated memory contexts for different topics or projects
 - **Notes System** - Create, search, and manage notes with semantic search (RAG)
 - **Concept Clustering** - Automatically identify themes and topics in your knowledge graph
@@ -26,6 +26,7 @@ MyCelium combines the power of LLMs with a knowledge graph to create an AI assis
 - **Text-to-Speech** - Generate audio lessons from your knowledge
 - **Growth Engine** - Let the bot explore and expand its knowledge autonomously
 - **theWay (Skills)** - Teach the AI reusable skills it can look up and follow
+- **Chrome Extension** - Browser sidebar for quick chat and one-click page ingestion
 
 ---
 
@@ -135,6 +136,16 @@ The AI will search for matching skills and follow the instructions you provided.
 
 ---
 
+### Chrome Extension
+
+Access Mycelium directly from your browser with the Chrome extension:
+
+- **Sidebar Chat** - Click the extension icon to open a chat panel in your browser sidebar
+- **One-Click Ingestion** - Ingest the current page into your knowledge graph with a single click
+- **Page Context** - Toggle "Include page" to send page content with your messages (auto-ingests if content exceeds limit)
+- **Workspace & Thread Switching** - Quickly switch between workspaces and threads without leaving your browser
+
+![Chrome Extension](screenshots/extension.jpg)
 
 ---
 
@@ -207,6 +218,17 @@ cp llm_config.example.json llm_config.json
 ```
 
 See the [Configuration](#configuration) section for provider-specific examples.
+
+### Chrome Extension Setup
+
+1. Open Chrome and navigate to `chrome://extensions/`
+2. Enable **Developer mode** (toggle in top right)
+3. Click **Load unpacked**
+4. Select the `extension/` directory from this repository
+5. The Mycelium icon will appear in your browser toolbar
+6. Click the icon to open the sidebar chat panel
+
+> **Note:** The extension connects to `http://localhost:8000` by default. Make sure the backend is running.
 
 ---
 
@@ -334,15 +356,116 @@ The UI will be available at `http://localhost:5173`
 
 ## API Endpoints
 
+### Core
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/chat` | POST | Send a message to the chatbot |
 | `/graph/{workspace_id}` | GET | Get graph data for visualization |
+| `/debug/graph_check/{workspace_id}` | GET | Debug graph data |
+
+### Workspaces
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
 | `/workspaces` | GET | List all workspaces |
+| `/workspaces` | POST | Create a new workspace |
+| `/workspaces/{id}` | DELETE | Delete a workspace |
+| `/workspaces/{id}/rename` | POST | Rename a workspace |
+| `/workspaces/{id}/stats` | GET | Get workspace statistics |
+| `/workspaces/{id}/settings` | GET/POST | Get or update workspace settings |
+| `/workspaces/{id}/emotions` | GET/POST | Get or update emotional state |
+| `/workspaces/{id}/generate_persona` | POST | Generate a persona for the workspace |
+| `/workspaces/available_tools` | GET | List all available tools |
+| `/workspaces/exposed_tools` | GET | List workspace tools exposed to other workspaces |
+| `/workspaces/{id}/generate_tool_description` | POST | Generate a tool description for a workspace |
+
+### Ingestion
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/workspaces/{id}/upload` | POST | Upload a file for ingestion |
+| `/workspaces/{id}/ingest-url` | POST | Ingest content from a URL |
+| `/workspaces/{id}/ingest_status` | GET | Get current ingestion status |
+| `/workspaces/{id}/ingest/stop` | POST | Stop current ingestion |
+
+### Threads
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/threads/{workspace_id}` | GET | List threads in a workspace |
+| `/threads` | POST | Create a new thread |
+| `/threads/with_messages` | POST | Create a thread with initial messages |
+| `/threads/{workspace_id}/{thread_id}` | DELETE | Delete a thread |
+| `/threads/{workspace_id}/{thread_id}/history` | GET | Get thread message history |
+| `/threads/{workspace_id}/{thread_id}/chat` | POST | Send a message in a thread |
+
+### Notes
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
 | `/workspaces/{id}/notes` | GET | List notes in a workspace |
-| `/workspaces/{id}/concepts` | GET | Get concept clusters |
-| `/workspaces/{id}/hot_topics` | GET | Get highly connected nodes |
+| `/workspaces/{id}/notes` | POST | Create a new note |
+| `/workspaces/{id}/notes/{note_id}` | GET | Get a specific note |
+| `/workspaces/{id}/notes/{note_id}` | PUT | Update a note |
+| `/workspaces/{id}/notes/{note_id}` | DELETE | Delete a note |
+
+### Skills (theWay)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/workspaces/{id}/skills` | GET | List skills in a workspace |
+| `/workspaces/{id}/skills` | POST | Create a new skill |
+| `/workspaces/{id}/skills/{skill_id}` | GET | Get a specific skill |
+| `/workspaces/{id}/skills/{skill_id}` | PUT | Update a skill |
+| `/workspaces/{id}/skills/{skill_id}` | DELETE | Delete a skill |
+
+### Graph & Concepts
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/concepts/{workspace_id}` | GET | Get concept clusters |
+| `/concepts/generate` | POST | Generate new concepts |
+| `/hot_topics/{workspace_id}` | GET | Get highly connected nodes |
+| `/connectors/{workspace_id}` | GET | Get connector/bridge nodes |
+| `/graph_chat/{workspace_id}/chat` | POST | Chat with graph context |
+| `/graph_chat/{workspace_id}/node/{node_id}` | GET | Get node details |
+| `/workspaces/{id}/graph/export` | GET | Export graph data |
+| `/workspaces/{id}/graph/import` | POST | Import graph data |
+
+### Growth Engine
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/workspaces/{id}/contemplate` | POST | Start contemplation/growth |
+| `/workspaces/{id}/contemplate/stop` | POST | Stop contemplation |
+| `/workspaces/{id}/knowledge_gaps` | GET | Get identified knowledge gaps |
+
+### Scripts
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/workspaces/{id}/scripts/generate` | POST | Generate a script |
+| `/workspaces/{id}/scripts` | GET | List scripts |
+| `/workspaces/{id}/scripts/{script_id}` | DELETE | Delete a script |
+
+### Audio
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/audio/speech` | POST | Generate speech from text |
+| `/audio/stream` | GET | Stream audio |
+
+### System
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
 | `/system/config` | GET/POST | Get or update LLM configuration |
+| `/system/models` | GET | List available models |
+| `/system/mcp/test` | POST | Test MCP connection |
+| `/system/mcp/tools` | GET | List MCP tools |
+| `/system/mcp/refresh` | POST | Refresh MCP tools |
+| `/system/mcp/status` | GET | Get MCP status |
 
 ---
 
@@ -359,6 +482,6 @@ The LangGraph agent has access to various tools:
 - **Reddit**: `search_reddit`, `browse_subreddit`, `read_reddit_thread`, `get_reddit_user`
 - **Research**: `search_biorxiv`, `read_biorxiv_abstract`, `search_arxiv`, `read_arxiv_abstract`, `ingest_arxiv_paper`
 - **Learning**: `generate_lesson`
-- **Skills**: `lookup_skill`
+- **Skills (theWay)**: `lookup_skill`
 
 ---
