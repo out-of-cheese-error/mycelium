@@ -897,6 +897,53 @@ def lookup_skill(query: str, workspace_id: str = "default"):
     except Exception as e:
         return f"Skill lookup failed: {e}"
 
+@tool
+def create_skill(title: str, summary: str, explanation: str, workspace_id: str = "default"):
+    """
+    Creates a new skill that can be looked up later using lookup_skill.
+    Use this when the user asks you to "learn", "remember how to", or "create a skill" for something.
+    
+    Args:
+        title: A short, descriptive name for the skill (e.g., "Professional Email Writing")
+        summary: A brief one-line description of what the skill does
+        explanation: Detailed step-by-step instructions on how to perform the skill
+        workspace_id: The workspace to save the skill in
+    
+    Returns:
+        Confirmation message with the skill ID
+    """
+    import time
+    
+    try:
+        # Generate skill ID
+        skill_id = str(uuid.uuid4())[:8]
+        
+        # Create skill data
+        skill_data = {
+            "id": skill_id,
+            "title": title or "Untitled Skill",
+            "summary": summary or "",
+            "explanation": explanation or "",
+            "updated_at": time.time()
+        }
+        
+        # Get skills directory
+        base_path = os.path.join("./memory_data", workspace_id)
+        skills_dir = os.path.join(base_path, "skills")
+        os.makedirs(skills_dir, exist_ok=True)
+        
+        # Save to file
+        with open(os.path.join(skills_dir, f"{skill_id}.json"), 'w') as f:
+            json.dump(skill_data, f, indent=2)
+        
+        # Index for semantic search
+        mem = GraphMemory(workspace_id=workspace_id)
+        mem.index_skill(skill_id, skill_data["title"], skill_data["summary"], skill_data["explanation"])
+        
+        return f"✅ Skill '{title}' created successfully (ID: {skill_id}). You can now use lookup_skill to find and apply this skill."
+    except Exception as e:
+        return f"Failed to create skill: {e}"
+
 
 tools = [
     DuckDuckGoSearchRun(), create_note, read_note, update_note, list_notes, delete_note, search_notes, 
@@ -910,7 +957,7 @@ tools = [
     search_biorxiv, read_biorxiv_abstract,
     search_arxiv, read_arxiv_abstract, ingest_arxiv_paper,
     consult_workspace, list_expert_workspaces,
-    lookup_skill
+    lookup_skill, create_skill
 ]
 
 
@@ -1060,7 +1107,9 @@ def generate_node(state: AgentState, config: RunnableConfig):
         # Science / Research
         "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
         # Utility
-        "generate_lesson"
+        "generate_lesson",
+        # Skills (theWay)
+        "lookup_skill", "create_skill"
     ]
     enabled_tools = DEFAULT_ENABLED_TOOLS  # Default to curated list
     
@@ -1536,7 +1585,8 @@ async def dynamic_tool_node(state: AgentState, config: RunnableConfig):
         "search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia", 
         "ingest_wikipedia_page", "check_ingestion_status", "get_books_by_subject", "ingest_web_page",
         "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
-        "generate_lesson"
+        "generate_lesson",
+        "lookup_skill", "create_skill"
     ]
     
     # Load enabled_tools from workspace config

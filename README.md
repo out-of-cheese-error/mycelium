@@ -482,6 +482,6 @@ The LangGraph agent has access to various tools:
 - **Reddit**: `search_reddit`, `browse_subreddit`, `read_reddit_thread`, `get_reddit_user`
 - **Research**: `search_biorxiv`, `read_biorxiv_abstract`, `search_arxiv`, `read_arxiv_abstract`, `ingest_arxiv_paper`
 - **Learning**: `generate_lesson`
-- **Skills (theWay)**: `lookup_skill`
+- **Skills (theWay)**: `lookup_skill`, `create_skill`
 
 ---
