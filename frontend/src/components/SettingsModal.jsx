@@ -382,7 +382,7 @@ const SettingsModal = ({ workspaceId, onClose }) => {
                                         "Workspace Cross-Talk": ["consult_workspace", "list_expert_workspaces"],
                                         "Ingestion": ["search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia", "ingest_wikipedia_page", "check_ingestion_status", "get_books_by_subject", "ingest_web_page"],
                                         "Science / Research": ["search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper"],
-                                        "Social / Reddit": ["search_reddit", "browse_subreddit", "read_reddit_thread", "get_reddit_user"],
+                                        "Social": ["search_reddit", "browse_subreddit", "read_reddit_thread", "get_reddit_user", "read_twitch_chat"],
                                         "Utility": ["generate_lesson"]
                                     };
 
