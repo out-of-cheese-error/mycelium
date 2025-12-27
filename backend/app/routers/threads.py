@@ -4,10 +4,23 @@ from typing import List, Dict, Optional
 import os
 import json
 import uuid
+import re
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from app.agent import app_agent
 
 from datetime import datetime
+
+def strip_markdown_from_title(title: str) -> str:
+    """Remove common markdown syntax from a title string."""
+    # Remove leading # (headers)
+    title = re.sub(r'^#+\s*', '', title)
+    # Remove bold markers ** or __
+    title = re.sub(r'\*\*|__', '', title)
+    # Remove italic markers * or _
+    title = re.sub(r'(?<!\*)\*(?!\*)|\b_\b', '', title)
+    # Remove backticks
+    title = title.replace('`', '')
+    return title.strip()
 
 router = APIRouter(prefix="/threads", tags=["threads"])
 
@@ -253,7 +266,7 @@ async def chat_in_thread(workspace_id: str, thread_id: str, request: ChatRequest
                 Title:"""
                 
                 title_resp = llm.invoke([HumanMessage(content=title_prompt)])
-                new_title = title_resp.content.strip().strip('"')
+                new_title = strip_markdown_from_title(title_resp.content.strip().strip('"'))
                 thread_data["title"] = new_title
              except Exception as e:
                  print(f"Title Generation Failed: {e}")
