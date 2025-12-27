@@ -13,6 +13,7 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from app.memory_store import GraphMemory
 from app.llm_config import llm_config
 from langchain_core.tools import tool
+from app.services.twitch_service import twitch_service
 
 @tool
 def create_note(title: str, content: str, workspace_id: str = "default"):
@@ -945,6 +946,31 @@ def create_skill(title: str, summary: str, explanation: str, workspace_id: str =
         return f"Failed to create skill: {e}"
 
 
+# --- Twitch Chat Tool ---
+@tool
+def read_twitch_chat(channel: str):
+    """
+    Connects to a Twitch channel's live chat and collects recent messages.
+    Waits until ~1000 tokens are collected or 30 seconds for slow chats.
+    Use this to understand what viewers are discussing in a live stream.
+    
+    Args:
+        channel: The Twitch channel name (without #)
+    
+    Returns:
+        A transcript of recent chat messages from the channel
+    """
+    try:
+        result = twitch_service.connect_and_collect(
+            channel=channel,
+            max_tokens=1000,
+            timeout_sec=30
+        )
+        return twitch_service.format_chat_transcript(result)
+    except Exception as e:
+        return f"Failed to read Twitch chat: {e}"
+
+
 tools = [
     DuckDuckGoSearchRun(), create_note, read_note, update_note, list_notes, delete_note, search_notes, 
     visit_page, search_images, generate_lesson, search_reddit, browse_subreddit, read_reddit_thread, 
@@ -957,7 +983,8 @@ tools = [
     search_biorxiv, read_biorxiv_abstract,
     search_arxiv, read_arxiv_abstract, ingest_arxiv_paper,
     consult_workspace, list_expert_workspaces,
-    lookup_skill, create_skill
+    lookup_skill, create_skill,
+    read_twitch_chat
 ]
 
 
@@ -1109,7 +1136,9 @@ def generate_node(state: AgentState, config: RunnableConfig):
         # Utility
         "generate_lesson",
         # Skills (theWay)
-        "lookup_skill", "create_skill"
+        "lookup_skill", "create_skill",
+        # Social / Streaming
+        "read_twitch_chat"
     ]
     enabled_tools = DEFAULT_ENABLED_TOOLS  # Default to curated list
     
@@ -1586,7 +1615,8 @@ async def dynamic_tool_node(state: AgentState, config: RunnableConfig):
         "ingest_wikipedia_page", "check_ingestion_status", "get_books_by_subject", "ingest_web_page",
         "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
         "generate_lesson",
-        "lookup_skill", "create_skill"
+        "lookup_skill", "create_skill",
+        "read_twitch_chat"
     ]
     
     # Load enabled_tools from workspace config
