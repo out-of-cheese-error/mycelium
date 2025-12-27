@@ -56,9 +56,63 @@ async function getApiUrl() {
     return result.apiUrl || DEFAULT_API_URL;
 }
 
+// Convert hex to HSL
+function hexToHsl(hex) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = (num >> 16) / 255;
+    const g = ((num >> 8) & 0x00FF) / 255;
+    const b = (num & 0x0000FF) / 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+
+    if (max === min) {
+        h = s = 0;
+    } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+            case g: h = ((b - r) / d + 2) / 6; break;
+            case b: h = ((r - g) / d + 4) / 6; break;
+        }
+    }
+    return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+// Convert HSL to hex
+function hslToHex(h, s, l) {
+    s /= 100;
+    l /= 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => {
+        const k = (n + h / 30) % 12;
+        const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+        return Math.round(255 * color).toString(16).padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+// Generate harmonious color palette from accent color
+function computeColorPalette(accentHex) {
+    const hsl = hexToHsl(accentHex);
+
+    // Generate unique color for each markdown element using hue rotation
+    return {
+        heading: accentHex, // Base accent for headers
+        bold: hslToHex((hsl.h + 15) % 360, Math.min(hsl.s + 5, 100), Math.min(hsl.l + 5, 85)),
+        italic: hslToHex((hsl.h + 45) % 360, Math.min(hsl.s, 90), Math.min(hsl.l + 10, 85)),
+        link: hslToHex((hsl.h + 60) % 360, Math.min(hsl.s + 10, 100), Math.min(hsl.l + 10, 85)),
+        code: hslToHex((hsl.h + 180) % 360, Math.max(hsl.s - 20, 40), Math.min(hsl.l + 15, 80)),
+        listMarker: hslToHex((hsl.h + 90) % 360, hsl.s, Math.min(hsl.l + 5, 80)),
+        blockquote: hslToHex((hsl.h + 270) % 360, Math.max(hsl.s - 20, 40), Math.min(hsl.l + 15, 75)),
+    };
+}
+
 // Apply theme to the extension
 function applyTheme(settings) {
-    const { theme = 'dark', accent_color = '#8b5cf6' } = settings;
+    const { theme = 'dark', accent_color = '#8b5cf6', colorful_markdown = false } = settings;
 
     // Get theme colors
     const themeColors = THEMES[theme] || THEMES.dark;
@@ -66,6 +120,34 @@ function applyTheme(settings) {
     // Generate accent variations
     const accentHover = adjustColor(accent_color, -20);
     const accentMuted = accent_color + '40';
+
+    // Generate markdown colors
+    let mdColors;
+    if (colorful_markdown) {
+        const palette = computeColorPalette(accent_color);
+        mdColors = {
+            '--md-heading': palette.heading,
+            '--md-bold': palette.bold,
+            '--md-italic': palette.italic,
+            '--md-link': palette.link,
+            '--md-code-bg': palette.code + '30',
+            '--md-code-text': palette.code,
+            '--md-list-marker': palette.listMarker,
+            '--md-blockquote': palette.blockquote,
+        };
+    } else {
+        // Neutral/muted colors when disabled
+        mdColors = {
+            '--md-heading': themeColors['--text-primary'],
+            '--md-bold': 'inherit',
+            '--md-italic': 'inherit',
+            '--md-link': accent_color,
+            '--md-code-bg': 'rgba(0,0,0,0.2)',
+            '--md-code-text': themeColors['--text-secondary'],
+            '--md-list-marker': themeColors['--text-muted'],
+            '--md-blockquote': themeColors['--text-muted'],
+        };
+    }
 
     // Create or update theme style element
     let styleEl = document.getElementById('mycelium-theme');
@@ -90,6 +172,14 @@ function applyTheme(settings) {
             --accent: ${accent_color} !important;
             --accent-hover: ${accentHover} !important;
             --accent-muted: ${accentMuted} !important;
+            --md-heading: ${mdColors['--md-heading']} !important;
+            --md-bold: ${mdColors['--md-bold']} !important;
+            --md-italic: ${mdColors['--md-italic']} !important;
+            --md-link: ${mdColors['--md-link']} !important;
+            --md-code-bg: ${mdColors['--md-code-bg']} !important;
+            --md-code-text: ${mdColors['--md-code-text']} !important;
+            --md-list-marker: ${mdColors['--md-list-marker']} !important;
+            --md-blockquote: ${mdColors['--md-blockquote']} !important;
         }
     `;
 }

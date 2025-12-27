@@ -22,6 +22,16 @@
     --error: #ef4444;
     --warning: #f59e0b;
 
+    /* Markdown colors (default neutral, colorful mode overrides via JS) */
+    --md-heading: #f9fafb;
+    --md-bold: inherit;
+    --md-italic: inherit;
+    --md-link: #8b5cf6;
+    --md-code-bg: rgba(0, 0, 0, 0.2);
+    --md-code-text: #e5e7eb;
+    --md-list-marker: #9ca3af;
+    --md-blockquote: #9ca3af;
+
     /* Typography */
     --font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
 }
