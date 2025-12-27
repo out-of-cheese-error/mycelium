@@ -80,6 +80,7 @@ const AppSettingsModal = ({ onClose }) => {
         accent_color: '#8b5cf6',
         font_family: 'Inter',
         font_size: 'md',
+        colorful_markdown: false,
         // MCP Servers
         mcp_servers: [],
     });
@@ -121,6 +122,7 @@ const AppSettingsModal = ({ onClose }) => {
                     accent_color: data.accent_color || '#8b5cf6',
                     font_family: data.font_family || 'Inter',
                     font_size: data.font_size || 'md',
+                    colorful_markdown: data.colorful_markdown || false,
                     mcp_servers: data.mcp_servers || [],
                 });
             }
@@ -136,8 +138,9 @@ const AppSettingsModal = ({ onClose }) => {
             accent_color: config.accent_color,
             font_family: config.font_family,
             font_size: config.font_size,
+            colorful_markdown: config.colorful_markdown,
         });
-    }, [config.theme, config.accent_color, config.font_family, config.font_size]);
+    }, [config.theme, config.accent_color, config.font_family, config.font_size, config.colorful_markdown]);
 
     const handleFetchModels = async () => {
         setIsFetchingModels(true);
@@ -206,6 +209,7 @@ const AppSettingsModal = ({ onClose }) => {
                 accent_color: config.accent_color,
                 font_family: config.font_family,
                 font_size: config.font_size,
+                colorful_markdown: config.colorful_markdown,
             });
             onClose();
         } catch (e) {
@@ -398,6 +402,28 @@ const AppSettingsModal = ({ onClose }) => {
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+
+                            {/* Colorful Markdown Toggle */}
+                            <div className="flex items-center justify-between p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                <div>
+                                    <h4 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Colorful Markdown</h4>
+                                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Color different markdown elements using accent color palette</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={config.colorful_markdown}
+                                        onChange={e => setConfig({ ...config, colorful_markdown: e.target.checked })}
+                                        className="sr-only peer"
+                                    />
+                                    <div
+                                        className="w-11 h-6 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"
+                                        style={{
+                                            backgroundColor: config.colorful_markdown ? 'var(--accent)' : 'var(--bg-tertiary)',
+                                        }}
+                                    />
+                                </label>
                             </div>
                         </div>
                     )}

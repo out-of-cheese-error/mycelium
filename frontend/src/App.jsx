@@ -97,6 +97,7 @@ function App() {
                         accent_color: config.accent_color || '#8b5cf6',
                         font_family: config.font_family || 'Inter',
                         font_size: config.font_size || 'md',
+                        colorful_markdown: config.colorful_markdown || false,
                     });
                     return true;
                 }
