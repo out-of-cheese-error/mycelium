@@ -159,19 +159,48 @@ class GraphMemory:
         )
 
     def search_concepts(self, query: str, k: int = 3):
-        """Searches concepts by semantic similarity."""
-        query_embedding = self.embedding_fn.embed_query(query)
-        results = self.concept_collection.query(
-            query_embeddings=[query_embedding],
-            n_results=k
-        )
-        
+        """Searches concepts by semantic similarity AND text matching."""
         hits = []
-        if results['ids'] and results['ids'][0]:
-            for i, concept_id in enumerate(results['ids'][0]):
-                meta = results['metadatas'][0][i]
-                doc = results['documents'][0][i]
-                hits.append(f"Concept: {meta.get('title')} (ID: {concept_id})\n{doc}")
+        seen_ids = set()
+        
+        # 1. Direct text matching on concept titles (catches exact/partial matches)
+        query_lower = query.lower()
+        try:
+            all_concepts = self.concept_collection.get()
+            if all_concepts['ids']:
+                for i, concept_id in enumerate(all_concepts['ids']):
+                    meta = all_concepts['metadatas'][i] if all_concepts['metadatas'] else {}
+                    title = meta.get('title', '')
+                    # Match if query contains title or title contains query
+                    if title and (query_lower in title.lower() or title.lower() in query_lower):
+                        doc = all_concepts['documents'][i] if all_concepts['documents'] else ''
+                        hits.append(f"Concept: {title} (ID: {concept_id})\n{doc}")
+                        seen_ids.add(concept_id)
+        except Exception as e:
+            print(f"Text matching in search_concepts failed: {e}")
+        
+        # 2. Semantic similarity search (fills remaining slots)
+        remaining_k = k - len(hits)
+        if remaining_k > 0:
+            try:
+                query_embedding = self.embedding_fn.embed_query(query)
+                results = self.concept_collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=k  # Request k, filter dupes below
+                )
+                
+                if results['ids'] and results['ids'][0]:
+                    for i, concept_id in enumerate(results['ids'][0]):
+                        if concept_id in seen_ids:
+                            continue
+                        if len(hits) >= k:
+                            break
+                        meta = results['metadatas'][0][i]
+                        doc = results['documents'][0][i]
+                        hits.append(f"Concept: {meta.get('title')} (ID: {concept_id})\n{doc}")
+                        seen_ids.add(concept_id)
+            except Exception as e:
+                print(f"Semantic search in search_concepts failed: {e}")
                 
         return "\n---\n".join(hits) if hits else "No relevant concepts found."
 
