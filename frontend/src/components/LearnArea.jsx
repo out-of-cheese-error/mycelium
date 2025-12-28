@@ -3,10 +3,8 @@ import { useStore } from '../store';
 import { Play, Loader, BookOpen, Mic, PlayCircle, Square, Trash2 } from 'lucide-react';
 import axios from 'axios';
 
-const API_base = import.meta.env.VITE_API_BASE || "http://localhost:8000";
-
 const LearnArea = () => {
-    const { scripts, fetchScripts, generateScript, deleteScript, currentWorkspace } = useStore();
+    const { scripts, fetchScripts, generateScript, deleteScript, currentWorkspace, API_BASE } = useStore();
     const [topic, setTopic] = useState("");
     const [isGenerating, setIsGenerating] = useState(false);
 
@@ -62,7 +60,7 @@ const LearnArea = () => {
         try {
             // Use GET /audio/stream for direct streaming
             // Note: GET has length limits, but script parts are short (2-3 sentences)
-            const url = API_base + "/audio/stream?input=" + encodeURIComponent(text);
+            const url = API_BASE + "/audio/stream?input=" + encodeURIComponent(text);
             const audio = new Audio(url);
             audioRef.current = audio;
 
