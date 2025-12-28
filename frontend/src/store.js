@@ -239,6 +239,25 @@ export const useStore = create((set, get) => ({
         }
     },
 
+    deleteAllThreads: async () => {
+        if (!confirm("Delete all chat threads in this workspace? This cannot be undone.")) return;
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+
+        try {
+            await axios.delete(`${API_base}/threads/${ws.id}`);
+            set({
+                threads: [],
+                currentThread: null,
+                messages: []
+            });
+            // Create a fresh "General" thread
+            get().createThread(ws.id, "General");
+        } catch (e) {
+            console.error("Delete all threads failed", e);
+        }
+    },
+
     selectThread: async (thread) => {
         const ws = get().currentWorkspace;
         if (thread) localStorage.setItem('lastThreadId', thread.id); // Persist

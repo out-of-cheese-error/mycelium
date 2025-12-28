@@ -23,6 +23,7 @@ const Sidebar = () => {
         createThread,
         selectThread,
         deleteThread,
+        deleteAllThreads,
         emotions,
         updateEmotions,
         ingestJobs,
@@ -230,9 +231,20 @@ const Sidebar = () => {
                     <div>
                         <div className="flex items-center justify-between px-2 mb-2">
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Chats</h3>
-                            <button onClick={() => createThread(currentWorkspace.id)} className="p-1 hover:bg-gray-800 rounded text-gray-400 hover:text-white transition-colors">
-                                <Plus size={14} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                                {threads.length > 0 && (
+                                    <button
+                                        onClick={deleteAllThreads}
+                                        className="p-1 hover:bg-gray-800 rounded text-gray-500 hover:text-red-400 transition-colors"
+                                        title="Remove all chats"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                )}
+                                <button onClick={() => createThread(currentWorkspace.id)} className="p-1 hover:bg-gray-800 rounded text-gray-400 hover:text-white transition-colors">
+                                    <Plus size={14} />
+                                </button>
+                            </div>
                         </div>
 
                         <div className="space-y-1">
