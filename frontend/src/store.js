@@ -1,7 +1,14 @@
 import { create } from 'zustand';
 import axios from 'axios';
 
-const API_base = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+// Get backend URL from localStorage, environment variable, or default
+const getApiBase = () => {
+    const stored = localStorage.getItem('mycelium_api_url');
+    if (stored) return stored;
+    return import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+};
+
+let API_base = getApiBase();
 
 export const useStore = create((set, get) => ({
     workspaces: [],
@@ -16,6 +23,17 @@ export const useStore = create((set, get) => ({
     initialLoading: true, // Track initial app loading state
     themeLoaded: false, // Track when theme has been applied
     API_BASE: API_base,
+
+    // Set the backend API URL
+    setApiBase: (url) => {
+        const cleanUrl = url.replace(/\/$/, ''); // Remove trailing slash
+        localStorage.setItem('mycelium_api_url', cleanUrl);
+        API_base = cleanUrl;
+        set({ API_BASE: cleanUrl });
+    },
+
+    // Get current API base (for components that need it)
+    getApiBase: () => API_base,
 
     // View State
     activeView: 'chat',

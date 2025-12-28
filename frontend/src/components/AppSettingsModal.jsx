@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Palette, Server, Volume2, Settings2, RefreshCw, Check, Plug, Plus, Trash2, Play, AlertCircle } from 'lucide-react';
+import { X, Save, Palette, Server, Volume2, Settings2, RefreshCw, Check, Plug, Plus, Trash2, Play, AlertCircle, Link } from 'lucide-react';
 import { useStore } from '../store';
 import { THEMES, applyThemeToDOM } from './ThemeProvider';
 
@@ -44,11 +44,16 @@ const TabButton = ({ active, onClick, icon: Icon, children }) => (
 );
 
 const AppSettingsModal = ({ onClose }) => {
-    const { fetchSystemConfig, updateSystemConfig, fetchModels, setUiSettings } = useStore();
+    const { fetchSystemConfig, updateSystemConfig, fetchModels, setUiSettings, setApiBase, API_BASE } = useStore();
     const [availableModels, setAvailableModels] = useState([]);
     const [isFetchingModels, setIsFetchingModels] = useState(false);
-    const [activeTab, setActiveTab] = useState('llm');
+    const [activeTab, setActiveTab] = useState('connection');
     const [isSaving, setIsSaving] = useState(false);
+
+    // Connection state
+    const [backendUrl, setBackendUrl] = useState(API_BASE);
+    const [connectionStatus, setConnectionStatus] = useState(null); // null, 'loading', 'success', 'error'
+    const [connectionError, setConnectionError] = useState('');
 
     const [config, setConfig] = useState({
         provider: 'lmstudio',
@@ -149,6 +154,36 @@ const AppSettingsModal = ({ onClose }) => {
         setIsFetchingModels(false);
     };
 
+    // Test backend connection
+    const testConnection = async () => {
+        const url = backendUrl.trim();
+        if (!url) {
+            setConnectionStatus('error');
+            setConnectionError('Please enter a URL');
+            return;
+        }
+
+        setConnectionStatus('loading');
+        setConnectionError('');
+
+        try {
+            const response = await fetch(`${url}/system/health`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            if (response.ok) {
+                setConnectionStatus('success');
+            } else {
+                setConnectionStatus('error');
+                setConnectionError(`Server returned ${response.status}`);
+            }
+        } catch (e) {
+            setConnectionStatus('error');
+            setConnectionError(e.message || 'Connection failed');
+        }
+    };
+
     // MCP Server management
     const [newMcpServer, setNewMcpServer] = useState({ name: '', command: '', args: '', env: '' });
     const [testingServer, setTestingServer] = useState(null);
@@ -199,6 +234,11 @@ const AppSettingsModal = ({ onClose }) => {
     const handleSave = async () => {
         setIsSaving(true);
         try {
+            // Save backend URL first
+            if (backendUrl.trim() !== API_BASE) {
+                setApiBase(backendUrl.trim());
+            }
+
             await updateSystemConfig({
                 ...config,
                 temperature: parseFloat(config.temperature),
@@ -249,9 +289,12 @@ const AppSettingsModal = ({ onClose }) => {
                 </div>
 
                 <div
-                    className="flex gap-2 p-3 border-b"
+                    className="flex gap-2 p-3 border-b overflow-x-auto"
                     style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}
                 >
+                    <TabButton active={activeTab === 'connection'} onClick={() => setActiveTab('connection')} icon={Link}>
+                        Connection
+                    </TabButton>
                     <TabButton active={activeTab === 'llm'} onClick={() => setActiveTab('llm')} icon={Server}>
                         LLM
                     </TabButton>
@@ -269,7 +312,66 @@ const AppSettingsModal = ({ onClose }) => {
                 {/* Tab Content */}
                 <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
 
-                    {/* APPEARANCE TAB */}
+                    {/* CONNECTION TAB */}
+                    {activeTab === 'connection' && (
+                        <div className="space-y-6">
+                            <div className="space-y-4 p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                <h4 className="text-sm font-bold" style={{ color: 'var(--accent)' }}>Backend Connection</h4>
+                                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                    Configure the URL where your Mycelium backend is running.
+                                </p>
+
+                                <div>
+                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>API URL</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            className="flex-1 p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                            style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                            value={backendUrl}
+                                            onChange={e => setBackendUrl(e.target.value)}
+                                            placeholder="http://localhost:8000"
+                                        />
+                                        <button
+                                            onClick={testConnection}
+                                            disabled={connectionStatus === 'loading'}
+                                            className="px-4 py-2 rounded border text-sm font-medium transition-colors disabled:opacity-50"
+                                            style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}
+                                        >
+                                            {connectionStatus === 'loading' ? (
+                                                <RefreshCw size={16} className="animate-spin" />
+                                            ) : (
+                                                'Test'
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Connection Status */}
+                                {connectionStatus && connectionStatus !== 'loading' && (
+                                    <div className={`p-3 rounded flex items-start gap-2 ${connectionStatus === 'success' ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                                        {connectionStatus === 'success' ? (
+                                            <Check size={16} className="text-green-500 mt-0.5" />
+                                        ) : (
+                                            <AlertCircle size={16} className="text-red-500 mt-0.5" />
+                                        )}
+                                        <div className="flex-1">
+                                            <div className="text-sm font-medium" style={{ color: connectionStatus === 'success' ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)' }}>
+                                                {connectionStatus === 'success' ? 'Connected successfully!' : 'Connection failed'}
+                                            </div>
+                                            {connectionError && (
+                                                <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{connectionError}</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                    Changes will be applied after saving. The page may need to be refreshed for all features to use the new URL.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     {activeTab === 'appearance' && (
                         <div className="space-y-6">
                             {/* Theme Selection */}

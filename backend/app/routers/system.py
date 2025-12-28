@@ -3,6 +3,11 @@ from app.llm_config import llm_config, LLMConfigModel
 
 router = APIRouter(prefix="/system", tags=["system"])
 
+@router.get("/health")
+async def health_check():
+    """Simple health check endpoint for testing connectivity."""
+    return {"status": "ok"}
+
 @router.get("/config", response_model=LLMConfigModel)
 async def get_system_config():
     return llm_config.get_config()
