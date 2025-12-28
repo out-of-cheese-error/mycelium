@@ -125,6 +125,24 @@ async def delete_thread(workspace_id: str, thread_id: str):
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Thread not found")
 
+@router.delete("/{workspace_id}")
+async def delete_all_threads(workspace_id: str):
+    """Delete all threads in a workspace."""
+    thread_dir = get_thread_dir(workspace_id)
+    if not os.path.exists(thread_dir):
+        return {"status": "deleted", "count": 0}
+    
+    deleted_count = 0
+    for filename in os.listdir(thread_dir):
+        if filename.endswith(".json"):
+            try:
+                os.remove(os.path.join(thread_dir, filename))
+                deleted_count += 1
+            except Exception as e:
+                print(f"Failed to delete {filename}: {e}")
+    
+    return {"status": "deleted", "count": deleted_count}
+
 @router.get("/{workspace_id}/{thread_id}/history")
 async def get_thread_history(workspace_id: str, thread_id: str):
     path = get_thread_path(workspace_id, thread_id)
