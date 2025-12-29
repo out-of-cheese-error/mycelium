@@ -970,6 +970,38 @@ def read_twitch_chat(channel: str):
     except Exception as e:
         return f"Failed to read Twitch chat: {e}"
 
+@tool
+async def ingest_twitch_chat(channel: str, duration_minutes: int, workspace_id: str = "default"):
+    """
+    Ingests Twitch chat from a channel for a specified duration.
+    Collects messages periodically and extracts entities/relations into the knowledge graph.
+    Use this to build knowledge from ongoing stream discussions.
+    
+    Args:
+        channel: The Twitch channel name (without #)
+        duration_minutes: How long to collect and ingest chat (in minutes)
+        workspace_id: The workspace to ingest into
+    
+    Returns:
+        Summary of ingestion results
+    """
+    import asyncio
+    import uuid
+    
+    job_id = str(uuid.uuid4())
+    
+    # Start ingestion in background task
+    asyncio.create_task(
+        twitch_service.ingest_chat(
+            channel=channel,
+            duration_minutes=duration_minutes,
+            workspace_id=workspace_id,
+            job_id=job_id
+        )
+    )
+    
+    return f"Started ingesting Twitch chat from #{channel} for {duration_minutes} minutes (Job ID: {job_id}). Use the sidebar to track progress."
+
 
 tools = [
     DuckDuckGoSearchRun(), create_note, read_note, update_note, list_notes, delete_note, search_notes, 
@@ -984,7 +1016,7 @@ tools = [
     search_arxiv, read_arxiv_abstract, ingest_arxiv_paper,
     consult_workspace, list_expert_workspaces,
     lookup_skill, create_skill,
-    read_twitch_chat
+    read_twitch_chat, ingest_twitch_chat
 ]
 
 

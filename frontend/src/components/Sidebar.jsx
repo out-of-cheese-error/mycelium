@@ -181,50 +181,64 @@ const Sidebar = () => {
                 )}
 
                 {/* Ingestion Progress List */}
-                {currentWorkspace && ingestJobs && ingestJobs.map((job) => (
-                    <div key={job.job_id} className="px-2 mb-2">
-                        <div className="bg-gray-800 rounded p-2 text-xs border border-gray-700">
-                            <div className="flex justify-between text-gray-400 mb-1 items-center">
-                                <span className="truncate max-w-[120px]" title={job.filename}>{job.filename || 'Processing...'}</span>
-                                <div className="flex items-center gap-2">
-                                    <span>
-                                        {job.current} / {job.total}
-                                    </span>
-                                    {/* Show status text if not processing */}
-                                    {job.status !== 'processing' && (
-                                        <span className={`text-[10px] uppercase font-bold ${job.status === 'completed' ? 'text-green-500' :
-                                            job.status === 'cancelled' ? 'text-yellow-500' : 'text-red-500'
-                                            }`}>
-                                            {job.status}
+                {currentWorkspace && ingestJobs && ingestJobs.map((job) => {
+                    // For twitch_chat jobs, current/total are seconds - show time remaining
+                    const isTwitchChat = job.type === 'twitch_chat';
+                    let progressText;
+                    if (isTwitchChat) {
+                        const remaining = Math.max(0, job.total - job.current);
+                        const mins = Math.floor(remaining / 60);
+                        const secs = remaining % 60;
+                        progressText = `${mins}:${secs.toString().padStart(2, '0')} left`;
+                    } else {
+                        progressText = `${job.current} / ${job.total}`;
+                    }
+
+                    return (
+                        <div key={job.job_id} className="px-2 mb-2">
+                            <div className="bg-gray-800 rounded p-2 text-xs border border-gray-700">
+                                <div className="flex justify-between text-gray-400 mb-1 items-center">
+                                    <span className="truncate max-w-[120px]" title={job.filename}>{job.filename || 'Processing...'}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span>
+                                            {progressText}
                                         </span>
-                                    )}
-                                    {/* Stop button only if processing */}
-                                    {job.status === 'processing' && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); stopIngest(job.job_id); }}
-                                            className="text-gray-500 hover:text-red-400 transition-colors"
-                                            title="Stop Ingestion"
-                                        >
-                                            <X size={12} />
-                                        </button>
-                                    )}
+                                        {/* Show status text if not processing */}
+                                        {job.status !== 'processing' && (
+                                            <span className={`text-[10px] uppercase font-bold ${job.status === 'completed' ? 'text-green-500' :
+                                                job.status === 'cancelled' ? 'text-yellow-500' : 'text-red-500'
+                                                }`}>
+                                                {job.status}
+                                            </span>
+                                        )}
+                                        {/* Stop button only if processing */}
+                                        {job.status === 'processing' && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); stopIngest(job.job_id); }}
+                                                className="text-gray-500 hover:text-red-400 transition-colors"
+                                                title="Stop Ingestion"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full transition-all duration-300 ease-out ${job.status === 'completed' ? 'bg-green-500' :
+                                            job.status === 'error' ? 'bg-red-500' :
+                                                job.status === 'cancelled' ? 'bg-yellow-500' :
+                                                    isTwitchChat ? 'bg-purple-500' : 'bg-blue-500'
+                                            }`}
+                                        style={{
+                                            width: `${Math.min(100, (job.current / Math.max(1, job.total)) * 100)}%`
+                                        }}
+                                    ></div>
                                 </div>
                             </div>
-                            <div className="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
-                                <div
-                                    className={`h-full transition-all duration-300 ease-out ${job.status === 'completed' ? 'bg-green-500' :
-                                        job.status === 'error' ? 'bg-red-500' :
-                                            job.status === 'cancelled' ? 'bg-yellow-500' :
-                                                'bg-blue-500'
-                                        }`}
-                                    style={{
-                                        width: `${Math.min(100, (job.current / Math.max(1, job.total)) * 100)}%`
-                                    }}
-                                ></div>
-                            </div>
                         </div>
-                    </div>
-                ))}
+                    )
+                })}
 
                 {/* THREADS */}
                 {currentWorkspace && (
