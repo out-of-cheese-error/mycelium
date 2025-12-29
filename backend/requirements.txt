@@ -13,8 +13,10 @@ python-dotenv
 duckduckgo-search
 ddgs
 beautifulsoup4
-httpx
+httpx<0.28
 python-multipart
 wikipedia
 pypdf
 arxiv
+youtube-transcript-api
+youtube-search-python
