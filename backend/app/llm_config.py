@@ -58,6 +58,19 @@ class LLMConfigModel(BaseModel):
     font_size: str = "md"  # sm, md, lg
     colorful_markdown: bool = False  # colorful markdown elements in chat
 
+    # Tab Visibility Settings (extensible - new extensions just add their key here)
+    enabled_tabs: Dict[str, bool] = {
+        "chat": True,
+        "graph": True,
+        "notes": True,
+        "learn": True,
+        "concepts": True,
+        "hot_topics": True,
+        "connectors": True,
+        "grow": True,
+        "theWay": True
+    }
+
     # MCP (Model Context Protocol) Servers
     mcp_servers: List[MCPServerConfig] = [
         MCPServerConfig(

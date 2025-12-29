@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Palette, Server, Volume2, Settings2, RefreshCw, Check, Plug, Plus, Trash2, Play, AlertCircle, Link } from 'lucide-react';
 import { useStore } from '../store';
 import { THEMES, applyThemeToDOM } from './ThemeProvider';
+import { TAB_REGISTRY, DEFAULT_ENABLED_TABS } from '../tabRegistry';
 
 const FONT_OPTIONS = [
     { value: 'Inter', label: 'Inter' },
@@ -86,6 +87,8 @@ const AppSettingsModal = ({ onClose }) => {
         font_family: 'Inter',
         font_size: 'md',
         colorful_markdown: false,
+        // Tab Visibility
+        enabled_tabs: DEFAULT_ENABLED_TABS,
         // MCP Servers
         mcp_servers: [],
     });
@@ -128,6 +131,7 @@ const AppSettingsModal = ({ onClose }) => {
                     font_family: data.font_family || 'Inter',
                     font_size: data.font_size || 'md',
                     colorful_markdown: data.colorful_markdown || false,
+                    enabled_tabs: data.enabled_tabs || DEFAULT_ENABLED_TABS,
                     mcp_servers: data.mcp_servers || [],
                 });
             }
@@ -250,6 +254,7 @@ const AppSettingsModal = ({ onClose }) => {
                 font_family: config.font_family,
                 font_size: config.font_size,
                 colorful_markdown: config.colorful_markdown,
+                enabled_tabs: config.enabled_tabs,
             });
             onClose();
         } catch (e) {
@@ -526,6 +531,45 @@ const AppSettingsModal = ({ onClose }) => {
                                         }}
                                     />
                                 </label>
+                            </div>
+
+                            {/* Tab Visibility */}
+                            <div className="p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                <h4 className="text-sm font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Tab Visibility</h4>
+                                <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Choose which tabs to show in the header</p>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {TAB_REGISTRY.map(tab => {
+                                        const Icon = tab.icon;
+                                        const isEnabled = config.enabled_tabs?.[tab.id] !== false;
+                                        return (
+                                            <label
+                                                key={tab.id}
+                                                className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all"
+                                                style={{
+                                                    backgroundColor: isEnabled ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'var(--bg-tertiary)',
+                                                    borderColor: isEnabled ? 'var(--accent)' : 'var(--border-subtle)',
+                                                }}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isEnabled}
+                                                    onChange={e => setConfig({
+                                                        ...config,
+                                                        enabled_tabs: {
+                                                            ...config.enabled_tabs,
+                                                            [tab.id]: e.target.checked
+                                                        }
+                                                    })}
+                                                    className="sr-only"
+                                                />
+                                                <Icon size={16} style={{ color: isEnabled ? 'var(--accent)' : 'var(--text-muted)' }} />
+                                                <span className="text-sm" style={{ color: isEnabled ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                                                    {tab.label}
+                                                </span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                     )}

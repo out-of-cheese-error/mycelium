@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import ReactMarkdown from 'react-markdown';
-import { Send, Cpu, Share2, MessageSquare, Network, Notebook, BookOpen, Layers, Flame, Route, BrainCircuit, RefreshCw, Compass } from 'lucide-react';
+import { Send, Cpu, Share2, RefreshCw } from 'lucide-react';
 import { useStore } from './store';
+import { TAB_REGISTRY } from './tabRegistry';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import NotesArea from './components/NotesArea';
@@ -216,76 +217,34 @@ function App() {
                         </div>
 
                         <div className="flex bg-gray-800 rounded p-1">
-                            <button
-                                onClick={() => setActiveView('chat')}
-                                className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors ${activeView === 'chat' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            >
-                                <MessageSquare size={14} /> Chat
-                            </button>
-                            <button
-                                onClick={() => setActiveView('graph')}
-                                className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors ${activeView === 'graph' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            >
-                                <Network size={14} /> Graph
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveView('notes');
-                                    if (currentWorkspace) useStore.getState().fetchNotesList(currentWorkspace.id);
-                                }}
-                                className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors ${activeView === 'notes' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            >
-                                <Notebook size={14} /> Notes
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveView('learn');
-                                }}
-                                className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors ${activeView === 'learn' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            >
-                                <BookOpen size={14} /> Learn
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveView('concepts');
-                                }}
-                                className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors ${activeView === 'concepts' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            >
-                                <Layers size={14} /> Concepts
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveView('hot_topics');
-                                }}
-                                className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors ${activeView === 'hot_topics' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            >
-                                <Flame size={14} /> Hot Topics
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveView('connectors');
-                                }}
-                                className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors ${activeView === 'connectors' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            >
-                                <Route size={14} /> Connectors
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveView('grow');
-                                }}
-                                className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors ${activeView === 'grow' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            >
-                                <BrainCircuit size={14} /> Grow
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveView('theWay');
-                                    if (currentWorkspace) useStore.getState().fetchSkillsList(currentWorkspace.id);
-                                }}
-                                className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors ${activeView === 'theWay' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            >
-                                <Compass size={14} /> theWay
-                            </button>
+                            {TAB_REGISTRY
+                                .filter(tab => uiSettings.enabled_tabs?.[tab.id] !== false)
+                                .map(tab => {
+                                    const Icon = tab.icon;
+                                    const isActive = activeView === tab.id;
+                                    const activeClass = tab.activeColor || 'bg-blue-600';
+
+                                    const handleClick = () => {
+                                        setActiveView(tab.id);
+                                        // Special handlers for certain tabs
+                                        if (tab.id === 'notes' && currentWorkspace) {
+                                            useStore.getState().fetchNotesList(currentWorkspace.id);
+                                        } else if (tab.id === 'theWay' && currentWorkspace) {
+                                            useStore.getState().fetchSkillsList(currentWorkspace.id);
+                                        }
+                                    };
+
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={handleClick}
+                                            className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors ${isActive ? `${activeClass} text-white` : 'text-gray-400 hover:text-white'}`}
+                                        >
+                                            <Icon size={14} /> {tab.label}
+                                        </button>
+                                    );
+                                })
+                            }
                         </div>
                     </div >
 

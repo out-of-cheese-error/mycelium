@@ -46,6 +46,17 @@ export const useStore = create((set, get) => ({
         font_family: 'Inter',
         font_size: 'md',
         colorful_markdown: false,
+        enabled_tabs: {
+            chat: true,
+            graph: true,
+            notes: true,
+            learn: true,
+            concepts: true,
+            hot_topics: true,
+            connectors: true,
+            grow: true,
+            theWay: true
+        },
     },
     setUiSettings: (settings) => set({ uiSettings: settings }),
 
@@ -766,6 +777,17 @@ export const useStore = create((set, get) => ({
                         font_family: data.font_family || 'Inter',
                         font_size: data.font_size || 'md',
                         colorful_markdown: data.colorful_markdown || false,
+                        enabled_tabs: data.enabled_tabs || {
+                            chat: true,
+                            graph: true,
+                            notes: true,
+                            learn: true,
+                            concepts: true,
+                            hot_topics: true,
+                            connectors: true,
+                            grow: true,
+                            theWay: true
+                        },
                     }
                 });
             }
