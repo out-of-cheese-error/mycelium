@@ -120,10 +120,21 @@ class YouTubeTranscriptService:
         video_id = self._extract_video_id(url_or_id)
         
         try:
+            # New API: instantiate and use fetch() method
+            api = YouTubeTranscriptApi()
             if languages:
-                transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
+                transcript = api.fetch(video_id, languages=languages)
             else:
-                transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+                transcript = api.fetch(video_id)
+            
+            # Convert FetchedTranscript to list of segment dicts
+            transcript_list = []
+            for segment in transcript:
+                transcript_list.append({
+                    'text': segment.text,
+                    'start': segment.start,
+                    'duration': segment.duration
+                })
             
             # Combine all segments into full text
             full_text = ' '.join([segment['text'] for segment in transcript_list])
@@ -269,27 +280,45 @@ class YouTubeTranscriptService:
         """
         import os
         import uuid
-        from app.document_processor import process_file, update_job_status
+        import time
+        import asyncio
+        from app.document_processor import process_file, ingest_status
         
         video_id = self._extract_video_id(url_or_id)
         
+        # Initialize status dict for workspace if needed
+        if workspace_id not in ingest_status:
+            ingest_status[workspace_id] = {}
+        
         # Update job status
-        update_job_status(workspace_id, job_id, {
-            "status": "running",
+        ingest_status[workspace_id][job_id] = {
+            "status": "processing",
             "filename": f"youtube_{video_id}",
             "current": 0,
             "total": 100,
-            "message": "Fetching transcript..."
-        })
+            "message": "Fetching transcript...",
+            "type": "youtube",
+            "updated_at": time.time()
+        }
         
-        # Fetch transcript
-        result = self.get_transcript(url_or_id, languages)
+        # Fetch transcript - wrap sync call in thread to not block event loop
+        try:
+            result = await asyncio.to_thread(self.get_transcript, url_or_id, languages)
+        except Exception as e:
+            print(f"YouTube transcript fetch error: {e}")
+            ingest_status[workspace_id][job_id] = {
+                "status": "error",
+                "message": f"Transcript fetch failed: {str(e)}",
+                "updated_at": time.time()
+            }
+            return {'success': False, 'error': str(e)}
         
         if not result.get('success'):
-            update_job_status(workspace_id, job_id, {
+            ingest_status[workspace_id][job_id] = {
                 "status": "error",
-                "message": result.get('error', 'Failed to fetch transcript')
-            })
+                "message": result.get('error', 'Failed to fetch transcript'),
+                "updated_at": time.time()
+            }
             return result
         
         # Create temp file with transcript
@@ -310,12 +339,15 @@ class YouTubeTranscriptService:
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
         
-        update_job_status(workspace_id, job_id, {
-            "status": "running",
+        ingest_status[workspace_id][job_id] = {
+            "status": "processing",
             "message": "Processing transcript...",
             "current": 20,
-            "total": 100
-        })
+            "total": 100,
+            "filename": f"youtube_{video_id}",
+            "type": "youtube",
+            "updated_at": time.time()
+        }
         
         # Process through document processor
         try:
@@ -328,15 +360,18 @@ class YouTubeTranscriptService:
                 'duration_minutes': result['total_duration_seconds'] / 60
             }
         except Exception as e:
-            update_job_status(workspace_id, job_id, {
+            print(f"YouTube ingestion error: {e}")
+            ingest_status[workspace_id][job_id] = {
                 "status": "error",
-                "message": f"Ingestion failed: {str(e)}"
-            })
+                "message": f"Ingestion failed: {str(e)}",
+                "updated_at": time.time()
+            }
             return {
                 'success': False,
                 'video_id': video_id,
                 'error': str(e)
             }
+
 
 
 # Global instance

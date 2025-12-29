@@ -1042,14 +1042,19 @@ async def ingest_youtube_transcript(url_or_id: str, workspace_id: str = "default
     
     job_id = str(uuid.uuid4())
     
+    async def run_ingestion():
+        """Wrapper to catch and log exceptions from background task."""
+        try:
+            await youtube_service.ingest_transcript(
+                url_or_id=url_or_id,
+                workspace_id=workspace_id,
+                job_id=job_id
+            )
+        except Exception as e:
+            print(f"YouTube ingestion background task failed: {e}")
+    
     # Start ingestion in background task
-    asyncio.create_task(
-        youtube_service.ingest_transcript(
-            url_or_id=url_or_id,
-            workspace_id=workspace_id,
-            job_id=job_id
-        )
-    )
+    asyncio.create_task(run_ingestion())
     
     return f"Started ingesting YouTube transcript (Job ID: {job_id}). Use the sidebar to track progress."
 
