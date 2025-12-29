@@ -5,7 +5,7 @@ import re
 import os
 import uuid
 import time
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage, ToolMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.runnables import RunnableConfig
@@ -14,6 +14,7 @@ from app.memory_store import GraphMemory
 from app.llm_config import llm_config
 from langchain_core.tools import tool
 from app.services.twitch_service import twitch_service
+from app.services.youtube_service import youtube_service
 
 @tool
 def create_note(title: str, content: str, workspace_id: str = "default"):
@@ -1003,6 +1004,80 @@ async def ingest_twitch_chat(channel: str, duration_minutes: int, workspace_id: 
     return f"Started ingesting Twitch chat from #{channel} for {duration_minutes} minutes (Job ID: {job_id}). Use the sidebar to track progress."
 
 
+# --- YouTube Transcript Tools ---
+@tool
+def read_youtube_transcript(url_or_id: str):
+    """
+    Reads the transcript/captions from a YouTube video.
+    Works with auto-generated and manual captions. No API key needed.
+    
+    Args:
+        url_or_id: YouTube URL or video ID (e.g., 'dQw4w9WgXcQ' or full URL)
+    
+    Returns:
+        The video transcript text
+    """
+    try:
+        result = youtube_service.get_transcript(url_or_id)
+        return youtube_service.format_transcript(result)
+    except Exception as e:
+        return f"Failed to read YouTube transcript: {e}"
+
+@tool
+async def ingest_youtube_transcript(url_or_id: str, workspace_id: str = "default"):
+    """
+    Ingests a YouTube video's transcript into the knowledge graph.
+    Extracts entities and relations from the video content.
+    Use this to remember and learn from YouTube videos.
+    
+    Args:
+        url_or_id: YouTube URL or video ID (e.g., 'dQw4w9WgXcQ' or full URL)
+        workspace_id: The workspace to ingest into
+    
+    Returns:
+        Summary of ingestion results
+    """
+    import asyncio
+    import uuid
+    
+    job_id = str(uuid.uuid4())
+    
+    async def run_ingestion():
+        """Wrapper to catch and log exceptions from background task."""
+        try:
+            await youtube_service.ingest_transcript(
+                url_or_id=url_or_id,
+                workspace_id=workspace_id,
+                job_id=job_id
+            )
+        except Exception as e:
+            print(f"YouTube ingestion background task failed: {e}")
+    
+    # Start ingestion in background task
+    asyncio.create_task(run_ingestion())
+    
+    return f"Started ingesting YouTube transcript (Job ID: {job_id}). Use the sidebar to track progress."
+
+@tool
+def search_youtube(query: str):
+    """
+    Searches YouTube for videos matching a query.
+    Returns video titles, URLs, duration, channel names, and view counts.
+    Use this to find videos before ingesting their transcripts.
+    
+    Args:
+        query: Search query (title, topic, keywords)
+    
+    Returns:
+        List of matching videos with URLs and metadata
+    """
+    try:
+        result = youtube_service.search_videos(query, limit=5)
+        return youtube_service.format_search_results(result)
+    except Exception as e:
+        return f"Failed to search YouTube: {e}"
+
+
 tools = [
     DuckDuckGoSearchRun(), create_note, read_note, update_note, list_notes, delete_note, search_notes, 
     visit_page, search_images, generate_lesson, search_reddit, browse_subreddit, read_reddit_thread, 
@@ -1016,13 +1091,89 @@ tools = [
     search_arxiv, read_arxiv_abstract, ingest_arxiv_paper,
     consult_workspace, list_expert_workspaces,
     lookup_skill, create_skill,
-    read_twitch_chat, ingest_twitch_chat
+    read_twitch_chat, ingest_twitch_chat,
+    search_youtube, read_youtube_transcript, ingest_youtube_transcript
 ]
 
 
 # --- Helper ---
 def get_llm():
     return llm_config.get_chat_llm()
+
+def truncate_messages_safe(messages: List[BaseMessage], limit: int) -> List[BaseMessage]:
+    """
+    Truncate messages to the last 'limit' messages, but ensure tool call/result pairs stay together.
+    
+    This prevents the Anthropic API error:
+    "Each tool_result block must have a corresponding tool_use block in the previous message."
+    
+    Rules:
+    1. If an AIMessage with tool_calls is included, all subsequent ToolMessages for those calls must be included
+    2. If a ToolMessage is included, the preceding AIMessage with the corresponding tool_call must be included
+    """
+    if len(messages) <= limit:
+        return messages
+    
+    # Start with the last 'limit' messages
+    truncated = messages[-limit:]
+    
+    # Check if the first message in truncated is a ToolMessage - if so, we need to include the preceding AIMessage
+    while truncated and isinstance(truncated[0], ToolMessage):
+        # Find the index in the original messages
+        original_idx = len(messages) - len(truncated)
+        
+        if original_idx <= 0:
+            # Can't go back further, remove the orphaned ToolMessage instead
+            truncated = truncated[1:]
+            continue
+            
+        # Look backwards for the AIMessage with the matching tool_call
+        found_ai_msg = False
+        for i in range(original_idx - 1, -1, -1):
+            msg = messages[i]
+            if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
+                # Found the AIMessage with tool calls - include it and any ToolMessages between it and our truncated list
+                truncated = messages[i:len(messages) - limit + len(truncated) + (original_idx - i)] + truncated[1:]
+                # Actually, simpler: just prepend all messages from this AIMessage to the first ToolMessage
+                truncated = messages[i:] if len(messages[i:]) <= limit + 10 else messages[i:i+limit+10]  # cap to avoid explosion
+                found_ai_msg = True
+                break
+            elif isinstance(msg, HumanMessage):
+                # Hit a human message before finding the AI with tool calls - something is wrong, just remove the orphan
+                truncated = truncated[1:]
+                break
+        
+        if not found_ai_msg and not isinstance(truncated[0], ToolMessage):
+            break
+        elif not found_ai_msg:
+            # Safety: if we didn't find it and still have ToolMessage, remove it
+            truncated = truncated[1:]
+    
+    # Now check if any AIMessage with tool_calls at the END is missing its ToolMessages
+    # This is less likely since we're taking the tail, but let's be safe
+    for i, msg in enumerate(truncated):
+        if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
+            # Check if all tool_calls have corresponding ToolMessages after this
+            tool_call_ids = {tc['id'] for tc in msg.tool_calls if isinstance(tc, dict) and 'id' in tc}
+            
+            # If there are tool calls, verify we have ToolMessages for all of them
+            found_tool_msg_ids = set()
+            for j in range(i + 1, len(truncated)):
+                if isinstance(truncated[j], ToolMessage):
+                    if hasattr(truncated[j], 'tool_call_id'):
+                        found_tool_msg_ids.add(truncated[j].tool_call_id)
+                elif isinstance(truncated[j], (HumanMessage, AIMessage)):
+                    # Hit next turn, stop looking
+                    break
+            
+            # If we're missing some ToolMessages, remove the tool_calls from this AIMessage
+            # by creating a copy without tool_calls (safer than modifying in place)
+            if tool_call_ids and not tool_call_ids.issubset(found_tool_msg_ids):
+                # Create a new AIMessage with just the content, no tool_calls
+                truncated[i] = AIMessage(content=msg.content or "")
+    
+    return truncated
+
 
 # --- State Definition ---
 class AgentState(TypedDict):
@@ -1313,12 +1464,9 @@ def generate_node(state: AgentState, config: RunnableConfig):
     except:
         pass
         
-    # We take the LAST 'limit' messages.
-    # Note: 'messages' in state contains only Human/AI messages from history, 
-    # SystemMessage is injected below.
-    history_messages = messages
-    if len(history_messages) > limit:
-        history_messages = history_messages[-limit:]
+    # We take the LAST 'limit' messages, but ensure tool call/result pairs stay together.
+    # This prevents the Anthropic API error about mismatched tool_use_id.
+    history_messages = truncate_messages_safe(messages, limit)
         
     prompt_messages = [SystemMessage(content=system_prompt)] + history_messages
     
