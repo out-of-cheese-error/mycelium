@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Palette, Server, Volume2, Settings2, RefreshCw, Check, Plug, Plus, Trash2, Play, AlertCircle, Link } from 'lucide-react';
+import { X, Save, Palette, Server, Volume2, Settings2, RefreshCw, Check, Plug, Plus, Trash2, Play, AlertCircle, Link, Layers } from 'lucide-react';
 import { useStore } from '../store';
 import { THEMES, applyThemeToDOM } from './ThemeProvider';
 import { TAB_REGISTRY, DEFAULT_ENABLED_TABS } from '../tabRegistry';
@@ -312,6 +312,9 @@ const AppSettingsModal = ({ onClose }) => {
                     <TabButton active={activeTab === 'mcp'} onClick={() => setActiveTab('mcp')} icon={Plug}>
                         MCP
                     </TabButton>
+                    <TabButton active={activeTab === 'tabs'} onClick={() => setActiveTab('tabs')} icon={Layers}>
+                        Tabs
+                    </TabButton>
                 </div>
 
                 {/* Tab Content */}
@@ -533,44 +536,7 @@ const AppSettingsModal = ({ onClose }) => {
                                 </label>
                             </div>
 
-                            {/* Tab Visibility */}
-                            <div className="p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
-                                <h4 className="text-sm font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Tab Visibility</h4>
-                                <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Choose which tabs to show in the header</p>
-                                <div className="grid grid-cols-3 gap-3">
-                                    {TAB_REGISTRY.map(tab => {
-                                        const Icon = tab.icon;
-                                        const isEnabled = config.enabled_tabs?.[tab.id] !== false;
-                                        return (
-                                            <label
-                                                key={tab.id}
-                                                className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all"
-                                                style={{
-                                                    backgroundColor: isEnabled ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'var(--bg-tertiary)',
-                                                    borderColor: isEnabled ? 'var(--accent)' : 'var(--border-subtle)',
-                                                }}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isEnabled}
-                                                    onChange={e => setConfig({
-                                                        ...config,
-                                                        enabled_tabs: {
-                                                            ...config.enabled_tabs,
-                                                            [tab.id]: e.target.checked
-                                                        }
-                                                    })}
-                                                    className="sr-only"
-                                                />
-                                                <Icon size={16} style={{ color: isEnabled ? 'var(--accent)' : 'var(--text-muted)' }} />
-                                                <span className="text-sm" style={{ color: isEnabled ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                                                    {tab.label}
-                                                </span>
-                                            </label>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+
                         </div>
                     )}
 
@@ -1088,6 +1054,66 @@ const AppSettingsModal = ({ onClose }) => {
                                         <Plus size={14} />
                                         Add Server
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TABS TAB */}
+                    {activeTab === 'tabs' && (
+                        <div className="space-y-6">
+                            <div className="p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                <h4 className="text-sm font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Tab Visibility</h4>
+                                <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+                                    Choose which tabs to show in the header. Toggle tabs on or off based on your workflow.
+                                </p>
+                                <div className="space-y-3">
+                                    {TAB_REGISTRY.map(tab => {
+                                        const Icon = tab.icon;
+                                        const isEnabled = config.enabled_tabs?.[tab.id] !== false;
+                                        return (
+                                            <div
+                                                key={tab.id}
+                                                className="flex items-start gap-3 p-3 rounded-lg border transition-all"
+                                                style={{
+                                                    backgroundColor: isEnabled ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'var(--bg-tertiary)',
+                                                    borderColor: isEnabled ? 'var(--accent)' : 'var(--border-subtle)',
+                                                }}
+                                            >
+                                                <label className="relative inline-flex items-center cursor-pointer mt-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isEnabled}
+                                                        onChange={e => setConfig({
+                                                            ...config,
+                                                            enabled_tabs: {
+                                                                ...config.enabled_tabs,
+                                                                [tab.id]: e.target.checked
+                                                            }
+                                                        })}
+                                                        className="sr-only peer"
+                                                    />
+                                                    <div
+                                                        className="w-9 h-5 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"
+                                                        style={{
+                                                            backgroundColor: isEnabled ? 'var(--accent)' : 'var(--bg-primary)',
+                                                        }}
+                                                    />
+                                                </label>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <Icon size={16} style={{ color: isEnabled ? 'var(--accent)' : 'var(--text-muted)' }} />
+                                                        <span className="text-sm font-medium" style={{ color: isEnabled ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                                                            {tab.label}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                                                        {tab.description}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>

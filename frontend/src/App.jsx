@@ -17,7 +17,7 @@ import SkillsArea from './components/SkillsArea';
 import { ThemeProvider, applyThemeToDOM } from './components/ThemeProvider';
 
 function App() {
-    const { graphData, currentWorkspace, currentThread, activeView, setActiveView, uiSettings, initialLoading, themeLoaded } = useStore();
+    const { graphData, currentWorkspace, currentThread, activeView, setActiveView, uiSettings, initialLoading, themeLoaded, workspaceLoading } = useStore();
     const hasActiveJobs = useStore(state => state.ingestJobs && state.ingestJobs.length > 0);
     const [selectedNode, setSelectedNode] = useState(null);
 
@@ -247,6 +247,35 @@ function App() {
                             }
                         </div>
                     </div >
+
+                    {/* Workspace Loading Overlay */}
+                    {workspaceLoading && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm">
+                            <style>{`
+                                @keyframes workspace-pulse {
+                                    0%, 100% { 
+                                        box-shadow: 0 0 20px 0px color-mix(in srgb, var(--accent) 40%, transparent);
+                                        border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+                                    }
+                                    50% { 
+                                        box-shadow: 0 0 40px 10px color-mix(in srgb, var(--accent) 80%, transparent);
+                                        border-color: var(--accent);
+                                    }
+                                }
+                                .workspace-loading-circle {
+                                    width: 48px;
+                                    height: 48px;
+                                    border-radius: 50%;
+                                    border: 3px solid var(--accent);
+                                    animation: workspace-pulse 1.5s ease-in-out infinite !important;
+                                }
+                            `}</style>
+                            <div className="flex flex-col items-center">
+                                <div className="workspace-loading-circle"></div>
+                                <p className="mt-4 text-sm font-medium text-gray-400">Loading workspace...</p>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Content Views */}
                     < div className="flex-1 relative overflow-hidden" >

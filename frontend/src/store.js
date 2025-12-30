@@ -19,6 +19,7 @@ export const useStore = create((set, get) => ({
     messages: [], // Chat messages for current session
     graphData: { nodes: [], links: [] },
     isLoading: false,
+    workspaceLoading: false, // Track workspace switching loading state
     isUploading: false, // Separate flag for file uploads (doesn't block chat)
     initialLoading: true, // Track initial app loading state
     themeLoaded: false, // Track when theme has been applied
@@ -148,10 +149,14 @@ export const useStore = create((set, get) => ({
 
     selectWorkspace: async (workspace) => {
         localStorage.setItem('lastWorkspaceId', workspace.id); // Persist
-        set({ currentWorkspace: workspace, messages: [], graphData: { nodes: [], links: [] }, currentThread: null, emotions: null });
-        await get().fetchGraph();
-        await get().fetchThreads(workspace.id);
-        get().fetchEmotions();
+        set({ currentWorkspace: workspace, messages: [], graphData: { nodes: [], links: [] }, currentThread: null, emotions: null, workspaceLoading: true });
+        try {
+            await get().fetchGraph();
+            await get().fetchThreads(workspace.id);
+            await get().fetchEmotions();
+        } finally {
+            set({ workspaceLoading: false });
+        }
     },
 
     fetchThreads: async (workspaceId) => {
