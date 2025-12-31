@@ -193,16 +193,20 @@ const ChatArea = () => {
                     </div>
                 )}
 
-                <input
+                <textarea
                     ref={inputRef}
-                    className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors shadow-inner"
+                    className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors shadow-inner resize-none"
                     placeholder={`Message ${currentWorkspace?.id || '...'}`}
                     value={chatInput}
                     onChange={handleInputChange}
                     onKeyDown={e => {
-                        if (e.key === 'Enter') handleSend();
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSend();
+                        }
                         if (e.key === 'Escape') setShowSuggestions(false);
                     }}
+                    rows={1}
                     autoFocus
                 />
                 {isLoading ? (
