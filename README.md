@@ -145,8 +145,6 @@ Access Mycelium directly from your browser with the Chrome extension:
 - **Page Context** - Toggle "Include page" to send page content with your messages (auto-ingests if content exceeds limit)
 - **Workspace & Thread Switching** - Quickly switch between workspaces and threads without leaving your browser
 
-![Chrome Extension](screenshots/extension.jpg)
-
 ---
 
 ## Installation
