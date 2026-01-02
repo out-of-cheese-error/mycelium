@@ -33,6 +33,7 @@ const GrowArea = () => {
 
     // Assign Singletons config
     const [singletonsN, setSingletonsN] = useState(10);
+    const [expandedProposals, setExpandedProposals] = useState({}); // Track which proposal reasons are expanded
 
     const logsContainerRef = useRef(null);
 
@@ -398,10 +399,10 @@ const GrowArea = () => {
                                         <div
                                             key={proposal.id}
                                             className={`bg-gray-900/50 border rounded-lg p-2 transition-colors ${proposal.action === 'skip'
-                                                    ? 'border-gray-700/30 opacity-50'
-                                                    : selectedProposalIds.includes(proposal.id)
-                                                        ? 'border-emerald-600/50 bg-emerald-900/10'
-                                                        : 'border-gray-700/50 hover:border-emerald-600/30'
+                                                ? 'border-gray-700/30 opacity-50'
+                                                : selectedProposalIds.includes(proposal.id)
+                                                    ? 'border-emerald-600/50 bg-emerald-900/10'
+                                                    : 'border-gray-700/50 hover:border-emerald-600/30'
                                                 }`}
                                         >
                                             <div className="flex items-start gap-2">
@@ -418,8 +419,8 @@ const GrowArea = () => {
                                                         <span className="text-gray-200 font-medium truncate">{proposal.singleton_id}</span>
                                                         <ArrowRight size={12} className="text-gray-500 flex-shrink-0" />
                                                         <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${proposal.action === 'merge' ? 'bg-cyan-900/50 text-cyan-300' :
-                                                                proposal.action === 'relate' ? 'bg-green-900/50 text-green-300' :
-                                                                    'bg-gray-800 text-gray-400'
+                                                            proposal.action === 'relate' ? 'bg-green-900/50 text-green-300' :
+                                                                'bg-gray-800 text-gray-400'
                                                             }`}>
                                                             {proposal.action}
                                                         </span>
@@ -431,7 +432,13 @@ const GrowArea = () => {
                                                         )}
                                                     </div>
                                                     {proposal.reason && (
-                                                        <div className="text-xs text-gray-500 mt-1 line-clamp-1">{proposal.reason}</div>
+                                                        <div
+                                                            className={`text-xs text-gray-500 mt-1 cursor-pointer hover:text-gray-400 ${expandedProposals[proposal.id] ? '' : 'line-clamp-1'}`}
+                                                            onClick={() => setExpandedProposals(prev => ({ ...prev, [proposal.id]: !prev[proposal.id] }))}
+                                                            title={expandedProposals[proposal.id] ? 'Click to collapse' : 'Click to expand'}
+                                                        >
+                                                            {proposal.reason}
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>
