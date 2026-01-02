@@ -742,6 +742,7 @@ class GenerateScriptRequest(BaseModel):
 
 from app.services.script_service import generate_script_logic, get_scripts_dir
 from app.services.contemplation_service import contemplate_logic, stop_contemplation
+from app.services.redundancy_service import collapse_redundancy, stop_redundancy
 
 @router.post("/{workspace_id}/contemplate")
 async def contemplate_workspace(workspace_id: str, n: int = 3, topic: str = None, save_to_notes: bool = False, depth: int = 1, job_id: str = None):
@@ -769,6 +770,36 @@ async def get_knowledge_gaps(
     
     mem = GraphMemory(workspace_id=workspace_id, base_dir=MEMORY_BASE_DIR)
     return mem.get_knowledge_gaps(limit=limit, max_degree=max_degree)
+
+
+@router.post("/{workspace_id}/collapse_redundancy")
+async def collapse_redundancy_endpoint(
+    workspace_id: str,
+    n: int = 20,
+    include_neighbors: bool = True,
+    preview: bool = True,
+    job_id: str = None
+):
+    """
+    Identifies and optionally merges semantically duplicate nodes.
+    
+    Args:
+        n: Number of top nodes (by degree centrality) to analyze
+        include_neighbors: Include 1st-degree neighbors in LLM analysis
+        preview: If True, only return proposed groups without modifying graph
+        job_id: Optional job ID for cancellation support
+    """
+    path = os.path.join(MEMORY_BASE_DIR, workspace_id)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    
+    return await collapse_redundancy(workspace_id, n, include_neighbors, preview, job_id)
+
+
+@router.post("/{workspace_id}/collapse_redundancy/stop")
+async def stop_collapse_redundancy(workspace_id: str, job_id: str):
+    stopped = stop_redundancy(job_id)
+    return {"status": "stopped" if stopped else "not_found"}
 
 
 @router.post("/{workspace_id}/scripts/generate")

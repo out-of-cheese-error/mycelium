@@ -837,6 +837,107 @@ export const useStore = create((set, get) => ({
         }
     },
 
+    // Collapse Redundancy state and actions
+    collapseRedundancyLoading: false,
+    collapseRedundancyPreview: null, // { groups: [...] }
+
+    previewCollapseRedundancy: async (n = 20, includeNeighbors = true) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return null;
+
+        const appendLog = (logObj) => {
+            set(state => ({
+                growLogs: {
+                    ...state.growLogs,
+                    [ws.id]: [...(state.growLogs[ws.id] || []), logObj]
+                }
+            }));
+        };
+
+        set({ collapseRedundancyLoading: true, collapseRedundancyPreview: null });
+        appendLog({ type: 'info', text: `Analyzing top ${n} nodes for redundancy...` });
+
+        try {
+            const params = new URLSearchParams({
+                n: n,
+                include_neighbors: includeNeighbors,
+                preview: true
+            });
+
+            const res = await axios.post(`${API_base}/workspaces/${ws.id}/collapse_redundancy?${params.toString()}`);
+
+            // Append backend logs
+            if (res.data.logs && Array.isArray(res.data.logs)) {
+                res.data.logs.forEach(log => appendLog(log));
+            }
+
+            if (res.data.groups && res.data.groups.length > 0) {
+                set({ collapseRedundancyPreview: res.data });
+                appendLog({ type: 'success', text: `Found ${res.data.groups.length} group(s) of potential duplicates.` });
+            } else {
+                appendLog({ type: 'info', text: 'No duplicate nodes found.' });
+            }
+
+            return res.data;
+        } catch (e) {
+            console.error("Preview collapse redundancy failed", e);
+            const errMsg = e.response?.data?.detail || e.message || "Unknown error";
+            appendLog({ type: 'error', text: `Error: ${errMsg}` });
+            return null;
+        } finally {
+            set({ collapseRedundancyLoading: false });
+        }
+    },
+
+    executeCollapseRedundancy: async (n = 20, includeNeighbors = true) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return null;
+
+        const appendLog = (logObj) => {
+            set(state => ({
+                growLogs: {
+                    ...state.growLogs,
+                    [ws.id]: [...(state.growLogs[ws.id] || []), logObj]
+                }
+            }));
+        };
+
+        set({ collapseRedundancyLoading: true });
+        appendLog({ type: 'info', text: `Executing merge...` });
+
+        try {
+            const params = new URLSearchParams({
+                n: n,
+                include_neighbors: includeNeighbors,
+                preview: false
+            });
+
+            const res = await axios.post(`${API_base}/workspaces/${ws.id}/collapse_redundancy?${params.toString()}`);
+
+            // Append backend logs
+            if (res.data.logs && Array.isArray(res.data.logs)) {
+                res.data.logs.forEach(log => appendLog(log));
+            }
+
+            appendLog({ type: 'success', text: res.data.message || 'Merge complete.' });
+
+            // Clear preview and refresh graph
+            set({ collapseRedundancyPreview: null });
+            get().fetchGraph();
+
+            return res.data;
+        } catch (e) {
+            console.error("Execute collapse redundancy failed", e);
+            const errMsg = e.response?.data?.detail || e.message || "Unknown error";
+            appendLog({ type: 'error', text: `Error: ${errMsg}` });
+            return null;
+        } finally {
+            set({ collapseRedundancyLoading: false });
+        }
+    },
+
+    clearCollapseRedundancyPreview: () => set({ collapseRedundancyPreview: null }),
+
     growLogs: {}, // { [workspaceId]: [] }
 
 
