@@ -743,6 +743,7 @@ class GenerateScriptRequest(BaseModel):
 from app.services.script_service import generate_script_logic, get_scripts_dir
 from app.services.contemplation_service import contemplate_logic, stop_contemplation
 from app.services.redundancy_service import collapse_redundancy, stop_redundancy
+from app.services.singleton_service import assign_singletons, stop_singleton_assignment, execute_selected_proposals
 
 @router.post("/{workspace_id}/contemplate")
 async def contemplate_workspace(workspace_id: str, n: int = 3, topic: str = None, save_to_notes: bool = False, depth: int = 1, job_id: str = None):
@@ -829,6 +830,55 @@ async def merge_group_endpoint(workspace_id: str, request: MergeGroupRequest):
         "message": f"Merged {result['nodes_removed']} node(s) into '{request.canonical}'",
         **result
     }
+
+
+@router.post("/{workspace_id}/assign_singletons")
+async def assign_singletons_endpoint(
+    workspace_id: str,
+    n: int = 10,
+    preview: bool = True,
+    job_id: str = None
+):
+    """
+    Analyzes singleton nodes and proposes relationships or merges.
+    
+    Args:
+        n: Number of singletons to analyze
+        preview: If True, only return proposals without modifying graph
+        job_id: Optional job ID for cancellation support
+    """
+    path = os.path.join(MEMORY_BASE_DIR, workspace_id)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    
+    return await assign_singletons(workspace_id, n, preview, job_id)
+
+
+@router.post("/{workspace_id}/assign_singletons/stop")
+async def stop_assign_singletons(workspace_id: str, job_id: str):
+    stopped = stop_singleton_assignment(job_id)
+    return {"status": "stopped" if stopped else "not_found"}
+
+
+class ExecuteProposalsRequest(BaseModel):
+    proposal_ids: List[str]
+    proposals: list  # Full proposals list to look up details
+
+
+@router.post("/{workspace_id}/execute_singleton_proposals")
+async def execute_singleton_proposals_endpoint(
+    workspace_id: str,
+    request: ExecuteProposalsRequest
+):
+    """
+    Execute only the selected singleton proposals.
+    Allows user to pick which proposals to apply.
+    """
+    path = os.path.join(MEMORY_BASE_DIR, workspace_id)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    
+    return await execute_selected_proposals(workspace_id, request.proposal_ids, request.proposals)
 
 
 @router.post("/{workspace_id}/scripts/generate")

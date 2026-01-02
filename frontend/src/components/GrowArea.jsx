@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Settings, Terminal, Search, Zap, AlertCircle, GitMerge, ChevronRight } from 'lucide-react';
+import { Play, Settings, Terminal, Search, Zap, AlertCircle, GitMerge, ChevronRight, Link, ArrowRight } from 'lucide-react';
 import { useStore } from '../store';
 
 const GrowArea = () => {
@@ -8,7 +8,11 @@ const GrowArea = () => {
         knowledgeGaps, knowledgeGapsLoading, fetchKnowledgeGaps,
         collapseRedundancyLoading, collapseRedundancyPreview,
         previewCollapseRedundancy, executeCollapseRedundancy, clearCollapseRedundancyPreview,
-        mergeSingleGroup
+        mergeSingleGroup,
+        // Assign Singletons
+        assignSingletonsLoading, assignSingletonsProposals, selectedProposalIds,
+        previewAssignSingletons, executeAssignSingletons,
+        toggleProposalSelection, selectAllProposals, deselectAllProposals, clearAssignSingletonsPreview
     } = useStore();
 
     const logs = (currentWorkspace && growLogs[currentWorkspace.id]) ? growLogs[currentWorkspace.id] : [];
@@ -26,6 +30,9 @@ const GrowArea = () => {
     // Collapse Redundancy config
     const [redundancyN, setRedundancyN] = useState(20);
     const [redundancyIncludeNeighbors, setRedundancyIncludeNeighbors] = useState(true);
+
+    // Assign Singletons config
+    const [singletonsN, setSingletonsN] = useState(10);
 
     const logsContainerRef = useRef(null);
 
@@ -327,6 +334,120 @@ const GrowArea = () => {
                                         )}
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Assign Singletons Section */}
+                    <div className="mt-6 pt-6 border-t border-gray-700">
+                        <h3 className="text-md font-semibold mb-3 flex items-center gap-2 text-emerald-400">
+                            <Link size={16} /> Assign Singletons
+                        </h3>
+                        <p className="text-xs text-gray-500 mb-3">
+                            Find orphaned nodes and suggest relations or merges with established nodes.
+                        </p>
+
+                        <div className="mb-3">
+                            <label className="block text-xs text-gray-500 mb-1">Singletons to Analyze</label>
+                            <input
+                                type="number"
+                                min="1" max="30"
+                                value={singletonsN}
+                                onChange={(e) => setSingletonsN(parseInt(e.target.value) || 10)}
+                                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
+                            />
+                        </div>
+
+                        <button
+                            onClick={() => previewAssignSingletons(singletonsN)}
+                            disabled={assignSingletonsLoading || isLoading}
+                            className="w-full py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-all bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-800/50 disabled:opacity-50"
+                        >
+                            {assignSingletonsLoading ? (
+                                <div className="w-4 h-4 border-2 border-emerald-300/30 border-t-emerald-300 rounded-full animate-spin" />
+                            ) : (
+                                <Search size={14} />
+                            )}
+                            {assignSingletonsLoading ? 'Analyzing...' : 'Analyze'}
+                        </button>
+
+                        {/* Proposals List */}
+                        {assignSingletonsProposals?.proposals?.length > 0 && (
+                            <div className="mt-3">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-gray-400">
+                                        {selectedProposalIds.length} / {assignSingletonsProposals.proposals.filter(p => p.action !== 'skip').length} selected
+                                    </span>
+                                    <div className="flex gap-1">
+                                        <button
+                                            onClick={selectAllProposals}
+                                            className="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-400"
+                                        >
+                                            All
+                                        </button>
+                                        <button
+                                            onClick={deselectAllProposals}
+                                            className="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-400"
+                                        >
+                                            None
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                    {assignSingletonsProposals.proposals.map((proposal) => (
+                                        <div
+                                            key={proposal.id}
+                                            className={`bg-gray-900/50 border rounded-lg p-2 transition-colors ${proposal.action === 'skip'
+                                                    ? 'border-gray-700/30 opacity-50'
+                                                    : selectedProposalIds.includes(proposal.id)
+                                                        ? 'border-emerald-600/50 bg-emerald-900/10'
+                                                        : 'border-gray-700/50 hover:border-emerald-600/30'
+                                                }`}
+                                        >
+                                            <div className="flex items-start gap-2">
+                                                {proposal.action !== 'skip' && (
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedProposalIds.includes(proposal.id)}
+                                                        onChange={() => toggleProposalSelection(proposal.id)}
+                                                        className="mt-1 rounded bg-gray-900 border-gray-700 text-emerald-500 focus:ring-emerald-500"
+                                                    />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-1 text-sm flex-wrap">
+                                                        <span className="text-gray-200 font-medium truncate">{proposal.singleton_id}</span>
+                                                        <ArrowRight size={12} className="text-gray-500 flex-shrink-0" />
+                                                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${proposal.action === 'merge' ? 'bg-cyan-900/50 text-cyan-300' :
+                                                                proposal.action === 'relate' ? 'bg-green-900/50 text-green-300' :
+                                                                    'bg-gray-800 text-gray-400'
+                                                            }`}>
+                                                            {proposal.action}
+                                                        </span>
+                                                        {proposal.target_id && (
+                                                            <span className="text-gray-400 truncate">{proposal.target_id}</span>
+                                                        )}
+                                                        {proposal.relation && (
+                                                            <span className="text-gray-500 text-xs">({proposal.relation})</span>
+                                                        )}
+                                                    </div>
+                                                    {proposal.reason && (
+                                                        <div className="text-xs text-gray-500 mt-1 line-clamp-1">{proposal.reason}</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                {selectedProposalIds.length > 0 && (
+                                    <button
+                                        onClick={executeAssignSingletons}
+                                        disabled={assignSingletonsLoading}
+                                        className="w-full mt-3 py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-all bg-green-900/30 hover:bg-green-900/50 text-green-300 border border-green-800/50 disabled:opacity-50"
+                                    >
+                                        <Link size={14} />
+                                        Execute Selected ({selectedProposalIds.length})
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
