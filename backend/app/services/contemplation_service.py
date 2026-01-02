@@ -47,6 +47,11 @@ async def contemplate_logic(workspace_id: str, n: int = 3, topic: str = None, sa
     else:
         nodes = mem.get_random_nodes(n)
         mode_desc = "random selection"
+    
+    # Filter out nodes that don't exist in the graph (stale vector store entries)
+    nodes = [node for node in nodes if node in mem.graph.nodes]
+    if nodes:
+        log(f"Found {len(nodes)} valid nodes in graph for {mode_desc}")
         
     if not nodes:
         return {"status": "no_nodes", "message": "Not enough memories to contemplate.", "logs": logs}
@@ -96,6 +101,10 @@ async def contemplate_logic(workspace_id: str, n: int = 3, topic: str = None, sa
     # Format Output
     context_lines = ["--- Knowledge Graph Context ---", "Entities:"]
     for n_id in subgraph_nodes:
+        # Skip nodes that don't exist in the graph (may be stale references from vector store)
+        if n_id not in mem.graph.nodes:
+            print(f"DEBUG: Skipping node '{n_id}' - not in graph")
+            continue
         data = mem.graph.nodes[n_id]
         desc = data.get('description', 'No description')
         context_lines.append(f"  - {n_id} ({data.get('type')}): {desc}")

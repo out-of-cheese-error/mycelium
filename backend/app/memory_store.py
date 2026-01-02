@@ -5,9 +5,14 @@ from langchain_core.documents import Document
 import json
 import os
 import uuid
+import threading
 from app.llm_config import llm_config
 
 MEMORY_BASE_DIR = "./memory_data"
+
+# Per-workspace locks to prevent concurrent writes
+_workspace_locks = {}
+_locks_lock = threading.Lock()  # Lock for accessing _workspace_locks
 
 class GraphMemory:
     def __init__(self, workspace_id: str = "default", base_dir: str = "./memory_data"):
@@ -15,6 +20,12 @@ class GraphMemory:
         self.base_dir = base_dir
         self.workspace_dir = os.path.join(base_dir, workspace_id)
         os.makedirs(self.workspace_dir, exist_ok=True)
+        
+        # Get or create lock for this workspace
+        with _locks_lock:
+            if workspace_id not in _workspace_locks:
+                _workspace_locks[workspace_id] = threading.Lock()
+            self._graph_lock = _workspace_locks[workspace_id]
         
         # 1. Initialize Graph
         self.graph_path = os.path.join(self.workspace_dir, "graph.json")
@@ -78,18 +89,20 @@ class GraphMemory:
     # ... rest of methods assume self.graph is correct ...
 
     def save_graph(self):
-        data = nx.node_link_data(self.graph)
-        tmp_path = self.graph_path + ".tmp"
-        try:
-            with open(tmp_path, 'w') as f:
-                json.dump(data, f)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, self.graph_path)
-        except Exception as e:
-            print(f"Error saving graph: {e}")
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
+        """Saves graph to disk with file locking to prevent corruption from concurrent writes."""
+        with self._graph_lock:
+            data = nx.node_link_data(self.graph)
+            tmp_path = self.graph_path + ".tmp"
+            try:
+                with open(tmp_path, 'w') as f:
+                    json.dump(data, f)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path, self.graph_path)
+            except Exception as e:
+                print(f"Error saving graph: {e}")
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
             
     # --- Note Embedding Methods ---
     def index_note(self, note_id: str, title: str, content: str):
