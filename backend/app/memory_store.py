@@ -961,3 +961,69 @@ class GraphMemory:
             "nodes_removed": nodes_removed,
             "canonical": canonical_id
         }
+
+    def get_singletons(self, n: int = 10, max_degree: int = 1) -> list:
+        """
+        Returns n random nodes with low connectivity (singletons/orphans).
+        
+        Args:
+            n: Number of singletons to return
+            max_degree: Maximum degree to consider as a singleton (default 1)
+        
+        Returns:
+            List of dicts with id, type, description, degree
+        """
+        if self.graph.number_of_nodes() == 0:
+            return []
+        
+        # Get all nodes with degree <= max_degree
+        singletons = []
+        for node_id in self.graph.nodes():
+            degree = self.graph.degree[node_id]
+            if degree <= max_degree:
+                node_data = self.graph.nodes[node_id]
+                singletons.append({
+                    "id": node_id,
+                    "type": node_data.get("type", "Unknown"),
+                    "description": node_data.get("description", ""),
+                    "degree": degree
+                })
+        
+        # Shuffle and take n
+        import random
+        random.shuffle(singletons)
+        return singletons[:n]
+
+    def get_established_nodes(self, n: int = 15, min_degree: int = 3) -> list:
+        """
+        Returns n random nodes with high connectivity (established/anchor nodes).
+        These serve as potential targets for relating singletons.
+        
+        Args:
+            n: Number of established nodes to return
+            min_degree: Minimum degree to consider as established (default 3)
+        
+        Returns:
+            List of dicts with id, type, description, degree
+        """
+        if self.graph.number_of_nodes() == 0:
+            return []
+        
+        # Get all nodes with degree >= min_degree
+        established = []
+        for node_id in self.graph.nodes():
+            degree = self.graph.degree[node_id]
+            if degree >= min_degree:
+                node_data = self.graph.nodes[node_id]
+                established.append({
+                    "id": node_id,
+                    "type": node_data.get("type", "Unknown"),
+                    "description": node_data.get("description", ""),
+                    "degree": degree
+                })
+        
+        # Shuffle and take n
+        import random
+        random.shuffle(established)
+        return established[:n]
+

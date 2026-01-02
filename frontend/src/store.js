@@ -837,6 +837,127 @@ export const useStore = create((set, get) => ({
         }
     },
 
+    // Assign Singletons state and actions
+    assignSingletonsLoading: false,
+    assignSingletonsProposals: null, // { proposals: [...], logs: [...] }
+    selectedProposalIds: [], // IDs of proposals user wants to execute
+
+    previewAssignSingletons: async (n = 10) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return null;
+
+        const appendLog = (logObj) => {
+            set(state => ({
+                growLogs: {
+                    ...state.growLogs,
+                    [ws.id]: [...(state.growLogs[ws.id] || []), logObj]
+                }
+            }));
+        };
+
+        set({ assignSingletonsLoading: true, assignSingletonsProposals: null, selectedProposalIds: [] });
+        appendLog({ type: 'info', text: `Analyzing ${n} singleton nodes...` });
+
+        try {
+            const params = new URLSearchParams({
+                n: n,
+                preview: true
+            });
+
+            const res = await axios.post(`${API_base}/workspaces/${ws.id}/assign_singletons?${params.toString()}`);
+
+            // Append backend logs
+            if (res.data.logs && Array.isArray(res.data.logs)) {
+                res.data.logs.forEach(log => appendLog(log));
+            }
+
+            if (res.data.proposals && res.data.proposals.length > 0) {
+                set({ assignSingletonsProposals: res.data });
+                appendLog({ type: 'success', text: `Generated ${res.data.proposals.length} proposal(s).` });
+            } else {
+                appendLog({ type: 'info', text: 'No proposals generated.' });
+            }
+
+            return res.data;
+        } catch (e) {
+            console.error("Preview assign singletons failed", e);
+            const errMsg = e.response?.data?.detail || e.message || "Unknown error";
+            appendLog({ type: 'error', text: `Error: ${errMsg}` });
+            return null;
+        } finally {
+            set({ assignSingletonsLoading: false });
+        }
+    },
+
+    executeAssignSingletons: async () => {
+        const ws = get().currentWorkspace;
+        const proposals = get().assignSingletonsProposals?.proposals;
+        const selectedIds = get().selectedProposalIds;
+        if (!ws || !proposals || selectedIds.length === 0) return null;
+
+        const appendLog = (logObj) => {
+            set(state => ({
+                growLogs: {
+                    ...state.growLogs,
+                    [ws.id]: [...(state.growLogs[ws.id] || []), logObj]
+                }
+            }));
+        };
+
+        set({ assignSingletonsLoading: true });
+        appendLog({ type: 'info', text: `Executing ${selectedIds.length} selected proposal(s)...` });
+
+        try {
+            const res = await axios.post(`${API_base}/workspaces/${ws.id}/execute_singleton_proposals`, {
+                proposal_ids: selectedIds,
+                proposals: proposals
+            });
+
+            // Append backend logs
+            if (res.data.logs && Array.isArray(res.data.logs)) {
+                res.data.logs.forEach(log => appendLog(log));
+            }
+
+            appendLog({ type: 'success', text: res.data.message || 'Proposals executed.' });
+
+            // Clear proposals and refresh graph
+            set({ assignSingletonsProposals: null, selectedProposalIds: [] });
+            get().fetchGraph();
+
+            return res.data;
+        } catch (e) {
+            console.error("Execute assign singletons failed", e);
+            const errMsg = e.response?.data?.detail || e.message || "Unknown error";
+            appendLog({ type: 'error', text: `Error: ${errMsg}` });
+            return null;
+        } finally {
+            set({ assignSingletonsLoading: false });
+        }
+    },
+
+    toggleProposalSelection: (proposalId) => {
+        set(state => {
+            const current = state.selectedProposalIds;
+            if (current.includes(proposalId)) {
+                return { selectedProposalIds: current.filter(id => id !== proposalId) };
+            } else {
+                return { selectedProposalIds: [...current, proposalId] };
+            }
+        });
+    },
+
+    selectAllProposals: () => {
+        const proposals = get().assignSingletonsProposals?.proposals || [];
+        const allIds = proposals.filter(p => p.action !== 'skip').map(p => p.id);
+        set({ selectedProposalIds: allIds });
+    },
+
+    deselectAllProposals: () => {
+        set({ selectedProposalIds: [] });
+    },
+
+    clearAssignSingletonsPreview: () => set({ assignSingletonsProposals: null, selectedProposalIds: [] }),
+
     // Collapse Redundancy state and actions
     collapseRedundancyLoading: false,
     collapseRedundancyPreview: null, // { groups: [...] }
