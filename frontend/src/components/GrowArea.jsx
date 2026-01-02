@@ -7,7 +7,8 @@ const GrowArea = () => {
         grow, growLogs, isLoading, currentWorkspace,
         knowledgeGaps, knowledgeGapsLoading, fetchKnowledgeGaps,
         collapseRedundancyLoading, collapseRedundancyPreview,
-        previewCollapseRedundancy, executeCollapseRedundancy, clearCollapseRedundancyPreview
+        previewCollapseRedundancy, executeCollapseRedundancy, clearCollapseRedundancyPreview,
+        mergeSingleGroup
     } = useStore();
 
     const logs = (currentWorkspace && growLogs[currentWorkspace.id]) ? growLogs[currentWorkspace.id] : [];
@@ -305,10 +306,21 @@ const GrowArea = () => {
                                         key={i}
                                         className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-2"
                                     >
-                                        <div className="flex items-center gap-1 text-sm">
-                                            <span className="text-cyan-300 font-medium">{group.canonical}</span>
-                                            <ChevronRight size={12} className="text-gray-500" />
-                                            <span className="text-gray-400">{group.duplicates.join(', ')}</span>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-1 text-sm flex-1 min-w-0">
+                                                <span className="text-cyan-300 font-medium truncate">{group.canonical}</span>
+                                                <ChevronRight size={12} className="text-gray-500 flex-shrink-0" />
+                                                <span className="text-gray-400 truncate">{group.duplicates.join(', ')}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => mergeSingleGroup(group.canonical, group.duplicates)}
+                                                disabled={collapseRedundancyLoading}
+                                                className="ml-2 px-2 py-1 text-xs rounded bg-green-900/30 hover:bg-green-900/50 text-green-300 border border-green-800/50 flex items-center gap-1 flex-shrink-0 disabled:opacity-50"
+                                                title="Merge this group"
+                                            >
+                                                <GitMerge size={10} />
+                                                Merge
+                                            </button>
                                         </div>
                                         {group.reason && (
                                             <div className="text-xs text-gray-500 mt-1">{group.reason}</div>

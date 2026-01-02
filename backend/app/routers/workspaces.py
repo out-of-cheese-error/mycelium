@@ -802,6 +802,35 @@ async def stop_collapse_redundancy(workspace_id: str, job_id: str):
     return {"status": "stopped" if stopped else "not_found"}
 
 
+class MergeGroupRequest(BaseModel):
+    canonical: str
+    duplicates: List[str]
+
+
+@router.post("/{workspace_id}/merge_group")
+async def merge_group_endpoint(workspace_id: str, request: MergeGroupRequest):
+    """
+    Merges a single group of duplicate nodes into a canonical node.
+    Used for one-by-one merging from the preview results.
+    """
+    path = os.path.join(MEMORY_BASE_DIR, workspace_id)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    
+    mem = GraphMemory(workspace_id=workspace_id, base_dir=MEMORY_BASE_DIR)
+    
+    if not mem.graph.has_node(request.canonical):
+        raise HTTPException(status_code=404, detail=f"Canonical node '{request.canonical}' not found")
+    
+    result = mem.merge_nodes(request.canonical, request.duplicates, merge_descriptions=True)
+    
+    return {
+        "status": "success",
+        "message": f"Merged {result['nodes_removed']} node(s) into '{request.canonical}'",
+        **result
+    }
+
+
 @router.post("/{workspace_id}/scripts/generate")
 async def generate_script(workspace_id: str, request: GenerateScriptRequest):
     try:

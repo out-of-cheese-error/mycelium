@@ -938,6 +938,54 @@ export const useStore = create((set, get) => ({
 
     clearCollapseRedundancyPreview: () => set({ collapseRedundancyPreview: null }),
 
+    mergeSingleGroup: async (canonical, duplicates) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return null;
+
+        const appendLog = (logObj) => {
+            set(state => ({
+                growLogs: {
+                    ...state.growLogs,
+                    [ws.id]: [...(state.growLogs[ws.id] || []), logObj]
+                }
+            }));
+        };
+
+        appendLog({ type: 'info', text: `Merging ${duplicates.join(', ')} into '${canonical}'...` });
+
+        try {
+            const res = await axios.post(`${API_base}/workspaces/${ws.id}/merge_group`, {
+                canonical,
+                duplicates
+            });
+
+            appendLog({ type: 'success', text: res.data.message });
+
+            // Remove this group from preview
+            set(state => {
+                if (!state.collapseRedundancyPreview?.groups) return state;
+                const updatedGroups = state.collapseRedundancyPreview.groups.filter(
+                    g => g.canonical !== canonical
+                );
+                return {
+                    collapseRedundancyPreview: updatedGroups.length > 0
+                        ? { ...state.collapseRedundancyPreview, groups: updatedGroups }
+                        : null
+                };
+            });
+
+            // Refresh graph
+            get().fetchGraph();
+
+            return res.data;
+        } catch (e) {
+            console.error("Merge single group failed", e);
+            const errMsg = e.response?.data?.detail || e.message || "Unknown error";
+            appendLog({ type: 'error', text: `Error: ${errMsg}` });
+            return null;
+        }
+    },
+
     growLogs: {}, // { [workspaceId]: [] }
 
 
