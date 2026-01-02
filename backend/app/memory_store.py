@@ -851,3 +851,113 @@ class GraphMemory:
             })
         
         return results
+
+    def get_node_summary(self, node_id: str, include_neighbors: bool = False) -> str:
+        """
+        Returns a text summary of a node for LLM processing.
+        Used by collapse redundancy to generate context for semantic grouping.
+        """
+        if not self.graph.has_node(node_id):
+            return ""
+        
+        node_data = self.graph.nodes[node_id]
+        node_type = node_data.get("type", "Unknown")
+        description = node_data.get("description", "")
+        degree = self.graph.degree[node_id]
+        
+        summary_parts = [f"Node: {node_id}", f"Type: {node_type}", f"Description: {description}", f"Connections: {degree}"]
+        
+        if include_neighbors:
+            neighbors = list(self.graph.neighbors(node_id))[:10]  # Limit to first 10
+            if neighbors:
+                neighbor_info = []
+                for nb in neighbors:
+                    edge_data = self.graph.get_edge_data(node_id, nb)
+                    relation = edge_data.get('relation', 'related') if edge_data else 'related'
+                    neighbor_info.append(f"{nb} ({relation})")
+                summary_parts.append(f"Neighbors: {', '.join(neighbor_info)}")
+        
+        return " | ".join(summary_parts)
+
+    def merge_nodes(self, canonical_id: str, duplicate_ids: list, merge_descriptions: bool = True) -> dict:
+        """
+        Merges duplicate nodes into a canonical node.
+        - Transfers all edges from duplicates to canonical
+        - Optionally merges descriptions
+        - Removes duplicate nodes from graph and vector store
+        
+        Returns: dict with keys 'edges_transferred', 'nodes_removed'
+        """
+        if not self.graph.has_node(canonical_id):
+            return {"edges_transferred": 0, "nodes_removed": 0, "error": f"Canonical node '{canonical_id}' not found"}
+        
+        edges_transferred = 0
+        nodes_removed = 0
+        
+        canonical_data = self.graph.nodes[canonical_id]
+        merged_descriptions = [canonical_data.get("description", "")]
+        
+        for dup_id in duplicate_ids:
+            if dup_id == canonical_id:
+                continue
+            if not self.graph.has_node(dup_id):
+                continue
+            
+            dup_data = self.graph.nodes[dup_id]
+            
+            # Collect description for merging
+            dup_desc = dup_data.get("description", "")
+            if dup_desc and dup_desc not in merged_descriptions:
+                merged_descriptions.append(dup_desc)
+            
+            # Transfer all edges from duplicate to canonical
+            for neighbor in list(self.graph.neighbors(dup_id)):
+                if neighbor == canonical_id:
+                    continue  # Skip self-loops
+                
+                edge_data = self.graph.get_edge_data(dup_id, neighbor)
+                relation = edge_data.get('relation', 'related') if edge_data else 'related'
+                
+                # Add edge to canonical if it doesn't exist
+                if not self.graph.has_edge(canonical_id, neighbor):
+                    self.graph.add_edge(canonical_id, neighbor, relation=relation)
+                    edges_transferred += 1
+            
+            # Remove duplicate node
+            self.graph.remove_node(dup_id)
+            nodes_removed += 1
+            
+            # Remove from vector store
+            try:
+                self.collection.delete(ids=[dup_id])
+            except Exception as e:
+                print(f"Warning: Failed to delete embedding for {dup_id}: {e}")
+        
+        # Merge descriptions
+        if merge_descriptions and len(merged_descriptions) > 1:
+            merged_desc = "; ".join([d for d in merged_descriptions if d])
+            self.graph.nodes[canonical_id]["description"] = merged_desc
+            
+            # Re-embed canonical node with updated description
+            # Truncate for embedding to avoid context length errors
+            node_type = canonical_data.get("type", "Unknown")
+            truncated_desc = merged_desc[:2000] if len(merged_desc) > 2000 else merged_desc
+            text_representation = f"{canonical_id} ({node_type}): {truncated_desc}"
+            try:
+                embedding = self.embedding_fn.embed_query(text_representation)
+                self.collection.upsert(
+                    ids=[canonical_id],
+                    embeddings=[embedding],
+                    documents=[text_representation],
+                    metadatas=[{"name": canonical_id, "type": node_type}]
+                )
+            except Exception as e:
+                print(f"Warning: Failed to re-embed {canonical_id}: {e}")
+        
+        self.save_graph()
+        
+        return {
+            "edges_transferred": edges_transferred,
+            "nodes_removed": nodes_removed,
+            "canonical": canonical_id
+        }

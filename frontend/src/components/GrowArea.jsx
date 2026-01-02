@@ -1,9 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Settings, Terminal, Search, Zap, AlertCircle } from 'lucide-react';
+import { Play, Settings, Terminal, Search, Zap, AlertCircle, GitMerge, ChevronRight } from 'lucide-react';
 import { useStore } from '../store';
 
 const GrowArea = () => {
-    const { grow, growLogs, isLoading, currentWorkspace, knowledgeGaps, knowledgeGapsLoading, fetchKnowledgeGaps } = useStore();
+    const {
+        grow, growLogs, isLoading, currentWorkspace,
+        knowledgeGaps, knowledgeGapsLoading, fetchKnowledgeGaps,
+        collapseRedundancyLoading, collapseRedundancyPreview,
+        previewCollapseRedundancy, executeCollapseRedundancy, clearCollapseRedundancyPreview,
+        mergeSingleGroup
+    } = useStore();
 
     const logs = (currentWorkspace && growLogs[currentWorkspace.id]) ? growLogs[currentWorkspace.id] : [];
 
@@ -16,6 +22,10 @@ const GrowArea = () => {
     // Knowledge Gaps config
     const [gapLimit, setGapLimit] = useState(10);
     const [gapMaxDegree, setGapMaxDegree] = useState(2);
+
+    // Collapse Redundancy config
+    const [redundancyN, setRedundancyN] = useState(20);
+    const [redundancyIncludeNeighbors, setRedundancyIncludeNeighbors] = useState(true);
 
     const logsContainerRef = useRef(null);
 
@@ -226,6 +236,97 @@ const GrowArea = () => {
                         {knowledgeGaps.length === 0 && !knowledgeGapsLoading && (
                             <div className="mt-3 text-xs text-gray-600 text-center py-2">
                                 Click "Find Gaps" to discover weak points in your knowledge graph.
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Collapse Redundancy Section */}
+                    <div className="mt-6 pt-6 border-t border-gray-700">
+                        <h3 className="text-md font-semibold mb-3 flex items-center gap-2 text-cyan-400">
+                            <GitMerge size={16} /> Collapse Redundancy
+                        </h3>
+                        <p className="text-xs text-gray-500 mb-3">
+                            Find and merge duplicate nodes that represent the same concept.
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                                <label className="block text-xs text-gray-500 mb-1">Top Nodes</label>
+                                <input
+                                    type="number"
+                                    min="5" max="50"
+                                    value={redundancyN}
+                                    onChange={(e) => setRedundancyN(parseInt(e.target.value) || 20)}
+                                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm focus:border-cyan-500 focus:outline-none"
+                                />
+                            </div>
+                            <div className="flex items-end">
+                                <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={redundancyIncludeNeighbors}
+                                        onChange={(e) => setRedundancyIncludeNeighbors(e.target.checked)}
+                                        className="rounded bg-gray-900 border-gray-700 text-cyan-500 focus:ring-cyan-500"
+                                    />
+                                    Include Neighbors
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => previewCollapseRedundancy(redundancyN, redundancyIncludeNeighbors)}
+                                disabled={collapseRedundancyLoading || isLoading}
+                                className="flex-1 py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-all bg-cyan-900/30 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-800/50 disabled:opacity-50"
+                            >
+                                {collapseRedundancyLoading ? (
+                                    <div className="w-4 h-4 border-2 border-cyan-300/30 border-t-cyan-300 rounded-full animate-spin" />
+                                ) : (
+                                    <Search size={14} />
+                                )}
+                                Preview
+                            </button>
+                            {collapseRedundancyPreview?.groups?.length > 0 && (
+                                <button
+                                    onClick={() => executeCollapseRedundancy(redundancyN, redundancyIncludeNeighbors)}
+                                    disabled={collapseRedundancyLoading || isLoading}
+                                    className="flex-1 py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-all bg-green-900/30 hover:bg-green-900/50 text-green-300 border border-green-800/50 disabled:opacity-50"
+                                >
+                                    <GitMerge size={14} />
+                                    Execute Merge
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Preview Results */}
+                        {collapseRedundancyPreview?.groups?.length > 0 && (
+                            <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+                                {collapseRedundancyPreview.groups.map((group, i) => (
+                                    <div
+                                        key={i}
+                                        className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-2"
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-1 text-sm flex-1 min-w-0">
+                                                <span className="text-cyan-300 font-medium truncate">{group.canonical}</span>
+                                                <ChevronRight size={12} className="text-gray-500 flex-shrink-0" />
+                                                <span className="text-gray-400 truncate">{group.duplicates.join(', ')}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => mergeSingleGroup(group.canonical, group.duplicates)}
+                                                disabled={collapseRedundancyLoading}
+                                                className="ml-2 px-2 py-1 text-xs rounded bg-green-900/30 hover:bg-green-900/50 text-green-300 border border-green-800/50 flex items-center gap-1 flex-shrink-0 disabled:opacity-50"
+                                                title="Merge this group"
+                                            >
+                                                <GitMerge size={10} />
+                                                Merge
+                                            </button>
+                                        </div>
+                                        {group.reason && (
+                                            <div className="text-xs text-gray-500 mt-1">{group.reason}</div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
