@@ -564,6 +564,8 @@ def traverse_graph_node(node_id: str, workspace_id: str = "default"):
             return f"Node '{node_id}' not found."
             
         output = f"## Node: {data['id']} ({data['type']})\n"
+        if data.get('created_at'):
+            output += f"Created: {data['created_at']}\n"
         output += f"Description: {data['description']}\n"
         output += f"## Neighbors ({len(data['neighbors'])}):\n"
         
@@ -1428,7 +1430,11 @@ def generate_node(state: AgentState, config: RunnableConfig):
     NOTE: No tools are currently enabled for this workspace. You can only respond with text.
     """
 
+    from datetime import date
+    today = date.today().isoformat()
+    
     system_prompt = f"""{base_system_prompt}
+    TODAY'S DATE: {today}
     CURRENT WORKSPACE ID: {workspace_id}
 
     CONTEXT FROM LONG-TERM MEMORY:

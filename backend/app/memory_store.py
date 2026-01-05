@@ -281,12 +281,12 @@ class GraphMemory:
         return None
 
     def add_entity(self, name: str, type: str, description: str):
-
         """Adds or updates an entity in the graph and vector store."""
+        from datetime import date
         
         # Add to Graph
         if not self.graph.has_node(name):
-            self.graph.add_node(name, type=type, description=description)
+            self.graph.add_node(name, type=type, description=description, created_at=date.today().isoformat())
         else:
             # Update description (simple append for now, could be smarter)
             old_desc = self.graph.nodes[name].get('description', '')
@@ -404,7 +404,9 @@ class GraphMemory:
             # 1. Expand current node
             node_data = self.graph.nodes[current_id]
             desc = f" - {node_data.get('description')}" if (current_dist == 0 or include_descriptions) else ""
-            context_lines.append(f"Entity (Depth {current_dist}): {current_id} ({node_data.get('type')}){desc}")
+            created_at = node_data.get('created_at')
+            date_str = f" (Created: {created_at})" if created_at else ""
+            context_lines.append(f"Entity (Depth {current_dist}): {current_id} ({node_data.get('type')}){date_str}{desc}")
             
             # Stop if we reached max depth
             if current_dist >= depth:
@@ -507,7 +509,9 @@ class GraphMemory:
             # 1. Expand current node
             node_data = self.graph.nodes[current_id]
             desc = f" - {node_data.get('description')}" if (current_dist == 0 or include_descriptions) else ""
-            context_lines.append(f"Entity (Depth {current_dist}): {current_id} ({node_data.get('type')}){desc}")
+            created_at = node_data.get('created_at')
+            date_str = f" (Created: {created_at})" if created_at else ""
+            context_lines.append(f"Entity (Depth {current_dist}): {current_id} ({node_data.get('type')}){date_str}{desc}")
             
             # Stop if we reached max depth
             if current_dist >= depth:
@@ -689,6 +693,7 @@ class GraphMemory:
             "id": node_id,
             "type": node_data.get("type", "Unknown"),
             "description": node_data.get("description", ""),
+            "created_at": node_data.get("created_at"),
             "neighbors": neighbors
         }
 

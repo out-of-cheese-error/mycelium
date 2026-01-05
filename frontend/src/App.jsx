@@ -327,6 +327,9 @@ function App() {
                                                     <div>
                                                         <h3 className="font-bold text-white text-lg leading-tight">{selectedNode.id}</h3>
                                                         <span className="text-xs font-mono text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded">{selectedNode.type || 'Unknown'}</span>
+                                                        {selectedNode.created_at && (
+                                                            <span className="text-xs text-gray-500 ml-2">Created: {selectedNode.created_at}</span>
+                                                        )}
                                                     </div>
                                                     <button
                                                         onClick={() => setSelectedNode(null)}
