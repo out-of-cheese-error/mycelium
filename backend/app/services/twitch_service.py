@@ -275,8 +275,9 @@ JSON:
                     try:
                         llm = llm_config.get_ingestion_llm()
                         response = await llm.ainvoke([HumanMessage(content=extraction_prompt)])
-                        content = response.content
-                        
+                        from app.utils.thinking import strip_thinking
+                        content = strip_thinking(response.content)
+
                         match = re.search(r"\{.*\}", content, re.DOTALL)
                         if match:
                             data = json.loads(match.group(0))

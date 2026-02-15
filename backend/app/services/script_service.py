@@ -51,8 +51,9 @@ async def generate_script_logic(workspace_id: str, topic: str):
         """
         
         response = llm.invoke([HumanMessage(content=prompt)])
-        content = response.content.strip()
-        
+        from app.utils.thinking import strip_thinking
+        content = strip_thinking(response.content)
+
         # Clean markdown if present
         match = re.search(r"\{.*\}", content, re.DOTALL)
         if match:

@@ -1563,7 +1563,12 @@ def generate_node(state: AgentState, config: RunnableConfig):
             from langchain_core.messages import AIMessage
             response = AIMessage(content="")
 
-    return {"messages": [response]}
+    # Strip <think> tags from response content before storing in state.
+    # The streaming layer (threads.py) already captured thinking via events,
+    # so we only need clean content in the state for tool loops and downstream nodes.
+    from app.utils.thinking import strip_thinking
+    if response.content:
+        response.content = strip_thinking(response.content)
 
     return {"messages": [response]}
 
@@ -1583,10 +1588,14 @@ def extract_knowledge_node(state: AgentState):
     if not last_human:
         return {}
 
+    # Defense-in-depth: strip any residual thinking tags from content used in prompt
+    from app.utils.thinking import strip_thinking
+    ai_content_clean = strip_thinking(last_ai.content) if last_ai.content else ""
+
     extraction_prompt = f"""Analyze the following interaction and extract meaningful entities and relationships to build a knowledge graph.
-    
+
     User: {last_human.content}
-    AI: {last_ai.content}
+    AI: {ai_content_clean}
     
     Return the output strictly as a JSON object with two keys: "entities" and "relations".
     
@@ -1622,7 +1631,8 @@ def extract_knowledge_node(state: AgentState):
         llm = get_llm()
         extraction_response = llm.invoke([HumanMessage(content=extraction_prompt)])
 
-        content = extraction_response.content
+        from app.utils.thinking import strip_thinking
+        content = strip_thinking(extraction_response.content)
         print(f"DEBUG: Extraction raw content: {content[:100]}...") # Log start of content
         
         # Basic cleanup to find JSON if wrapped in markdown
@@ -1716,9 +1726,10 @@ def update_emotions_node(state: AgentState):
         print(f"DEBUG: All emotion scales are frozen for {workspace_id}, skipping update.")
         return {}
     
+    from app.utils.thinking import strip_thinking
     scales_str = "\n".join([f"    - {s['name']}: {s['value']} (0-100)" for s in updatable_scales])
     delta_keys = ", ".join([f'"{s["name"].lower()}_delta": int' for s in updatable_scales])
-    
+
     prompt = f"""Analyze the user's message and the AI's response to update the AI's emotional state and MOTIVE.
     
 Current Emotional Scales (only these can be updated):
@@ -1726,8 +1737,8 @@ Current Emotional Scales (only these can be updated):
     - Current Motive: "{motive}"
     
 User: {last_human.content}
-AI: {last_ai.content}
-    
+AI: {strip_thinking(last_ai.content) if last_ai.content else ""}
+
 Tasks:
 1. Determine DELTA change for each emotion scale (+/- int). Small changes (-5 to +5) for subtle shifts, larger for significant events.
 2. CONSTRUCT A NEW MOTIVE (string) based on the interaction.
@@ -1747,10 +1758,12 @@ JSON:"""
         llm = get_llm()
         response = llm.invoke([HumanMessage(content=prompt)])
 
-        match = re.search(r"\{.*\}", response.content, re.DOTALL)
+        from app.utils.thinking import strip_thinking
+        emotion_content = strip_thinking(response.content)
+        match = re.search(r"\{.*\}", emotion_content, re.DOTALL)
         if match:
             output = json.loads(match.group(0))
-            
+
             # Update scales dynamically
             for scale in scales:
                 if scale.get("frozen", False):

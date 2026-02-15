@@ -10,6 +10,36 @@ const getApiBase = () => {
 
 let API_base = getApiBase();
 
+/**
+ * Parse thinking content from raw LLM output.
+ * Handles both explicit (<think>...</think>) and implicit (no <think>, just </think>) thinking.
+ * Returns { thinking, content, isThinking }
+ */
+function parseThinking(raw) {
+    // Check for </think> which marks the end of thinking
+    const closeIdx = raw.indexOf('</think>');
+    if (closeIdx !== -1) {
+        // Found end of thinking - split into thinking and response
+        const openIdx = raw.indexOf('<think>');
+        const thinkStart = (openIdx !== -1 && openIdx < closeIdx) ? openIdx + 7 : 0;
+        const thinking = raw.slice(thinkStart, closeIdx).trim();
+        const content = raw.slice(closeIdx + 8).trim(); // 8 = "</think>".length
+        return { thinking, content, isThinking: false };
+    }
+
+    // No </think> yet - check if we're mid-thinking
+    const openIdx = raw.indexOf('<think>');
+    if (openIdx !== -1) {
+        // Explicit <think> found but no </think> yet - still streaming thinking
+        const content = raw.slice(0, openIdx);
+        const thinking = raw.slice(openIdx + 7); // 7 = "<think>".length
+        return { thinking, content, isThinking: true };
+    }
+
+    // No think tags at all - regular content
+    return { thinking: '', content: raw, isThinking: false };
+}
+
 export const useStore = create((set, get) => ({
     workspaces: [],
     currentWorkspace: null,
@@ -377,7 +407,7 @@ export const useStore = create((set, get) => ({
             messages: [...state.messages, { role: 'assistant', content: '' }]
         }));
 
-        let aiContent = "";
+        let rawContent = "";  // Accumulated raw content from stream
         const controller = new AbortController();
         set({ abortController: controller });
 
@@ -400,18 +430,26 @@ export const useStore = create((set, get) => ({
                 const { done, value } = await reader.read();
                 if (done) break;
                 const chunk = decoder.decode(value, { stream: true });
-                aiContent += chunk;
+                rawContent += chunk;
+
+                // Parse thinking from accumulated raw content
+                const parsed = parseThinking(rawContent);
 
                 // Update UI incrementally
                 set(state => {
                     const msgs = [...state.messages];
                     const lastMsg = msgs[msgs.length - 1];
                     if (lastMsg.role === 'assistant') {
-                        lastMsg.content = aiContent;
+                        lastMsg.content = parsed.content;
+                        lastMsg.thinking = parsed.thinking || null;
+                        lastMsg.isThinking = parsed.isThinking;
                     }
                     return { messages: msgs };
                 });
             }
+
+            // Final parse for post-stream checks
+            const finalParsed = parseThinking(rawContent);
 
             // Post-stream updates
             get().fetchGraph();
@@ -420,7 +458,7 @@ export const useStore = create((set, get) => ({
             get().refreshThreadList();
 
             // Check if we generated a lesson
-            if (aiContent.includes("Learn tab") || aiContent.includes("Lesson")) {
+            if (finalParsed.content.includes("Learn tab") || finalParsed.content.includes("Lesson")) {
                 get().fetchScripts();
             }
 
@@ -1433,7 +1471,7 @@ export const useStore = create((set, get) => ({
             graphChatMessages: [...state.graphChatMessages, { role: 'assistant', content: '' }]
         }));
 
-        let aiContent = "";
+        let rawContent = "";
 
         try {
             const response = await fetch(`${API_base}/graph/${ws.id}/chat`, {
@@ -1458,25 +1496,29 @@ export const useStore = create((set, get) => ({
                 const { done, value } = await reader.read();
                 if (done) break;
                 const chunk = decoder.decode(value, { stream: true });
-                aiContent += chunk;
+                rawContent += chunk;
 
-                // Update UI incrementally (but don't show metadata marker)
-                const displayContent = aiContent.split('###GRAPH_CONTEXT###')[0];
+                // Parse thinking from accumulated raw content (strip metadata marker for display)
+                const withoutMeta = rawContent.split('###GRAPH_CONTEXT###')[0];
+                const parsed = parseThinking(withoutMeta);
+
                 set(state => {
                     const msgs = [...state.graphChatMessages];
                     const lastMsg = msgs[msgs.length - 1];
                     if (lastMsg.role === 'assistant') {
-                        lastMsg.content = displayContent;
+                        lastMsg.content = parsed.content;
+                        lastMsg.thinking = parsed.thinking || null;
+                        lastMsg.isThinking = parsed.isThinking;
                     }
                     return { graphChatMessages: msgs };
                 });
             }
 
-            // Parse metadata from the end of the response
-            if (aiContent.includes('###GRAPH_CONTEXT###')) {
-                const parts = aiContent.split('###GRAPH_CONTEXT###');
-                const textContent = parts[0].trim();
+            // Parse metadata from the end of the raw content
+            if (rawContent.includes('###GRAPH_CONTEXT###')) {
+                const parts = rawContent.split('###GRAPH_CONTEXT###');
                 const metadataStr = parts[1];
+                const parsed = parseThinking(parts[0]);
 
                 try {
                     const metadata = JSON.parse(metadataStr);
@@ -1493,7 +1535,7 @@ export const useStore = create((set, get) => ({
                     const msgs = [...state.graphChatMessages];
                     const lastMsg = msgs[msgs.length - 1];
                     if (lastMsg.role === 'assistant') {
-                        lastMsg.content = textContent;
+                        lastMsg.content = parsed.content;
                     }
                     return { graphChatMessages: msgs };
                 });

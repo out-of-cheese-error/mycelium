@@ -80,24 +80,53 @@ If you don't have enough information, say so clearly."""
     ]
     
     async def event_generator():
-        full_response = ""
-        
+        full_raw = ""
+        strip_buffer = ""
+
+        thinking_enabled = llm_config.get_config().thinking_enabled
+
         try:
+            from app.utils.thinking import strip_thinking
             llm = llm_config.get_chat_llm()
-            
-            # Stream the response
+
             for chunk in llm.stream(messages):
-                if chunk.content:
-                    full_response += chunk.content
-                    yield chunk.content
-            
+                if not chunk.content:
+                    continue
+
+                if not thinking_enabled:
+                    # Strip think tags silently
+                    strip_buffer += chunk.content
+                    # Only buffer if we see an explicit <think> without closing tag yet
+                    if "<think>" in strip_buffer and "</think>" not in strip_buffer:
+                        continue
+                    if "<think>" in strip_buffer or "</think>" in strip_buffer:
+                        clean = strip_thinking(strip_buffer)
+                    else:
+                        clean = strip_buffer
+                    if clean:
+                        full_raw += strip_buffer
+                        yield clean
+                    strip_buffer = ""
+                    continue
+
+                # Thinking enabled: yield raw content, frontend handles display
+                full_raw += chunk.content
+                yield chunk.content
+
+            # Flush remaining strip buffer
+            if strip_buffer:
+                clean = strip_thinking(strip_buffer)
+                if clean:
+                    full_raw += strip_buffer
+                    yield clean
+
             # After streaming completes, append the metadata
             metadata = {
                 "retrieved_nodes": retrieved_nodes,
                 "retrieved_edges": retrieved_edges
             }
             yield f"\n###GRAPH_CONTEXT###{json.dumps(metadata)}"
-            
+
         except Exception as e:
             print(f"Graph chat error: {e}")
             import traceback

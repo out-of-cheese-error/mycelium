@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Volume2, Loader, Square } from 'lucide-react';
+import { Send, Volume2, Loader, Square, ChevronRight } from 'lucide-react';
 import { useStore } from '../store';
 
 const ChatArea = () => {
@@ -158,6 +158,8 @@ const ChatArea = () => {
                         key={i}
                         role={m.role}
                         content={m.content}
+                        thinking={m.thinking}
+                        isThinking={m.isThinking}
                         index={i}
                         isPlaying={playingId === i}
                         isLoadingAudio={audioLoadingId === i}
@@ -227,9 +229,36 @@ const ChatArea = () => {
     );
 };
 
+// Collapsible thinking block for models that use <think> tags
+const ThinkingBlock = ({ thinking, isThinking }) => {
+    const [expanded, setExpanded] = useState(false);
+
+    if (!thinking && !isThinking) return null;
+
+    return (
+        <div className="mb-2">
+            <button
+                onClick={() => setExpanded(!expanded)}
+                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-300 transition-colors"
+            >
+                {isThinking && <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse" />}
+                <ChevronRight size={12} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
+                {isThinking ? 'Thinking...' : 'Thought process'}
+            </button>
+            {expanded && thinking && (
+                <div className="mt-1 pl-3 border-l border-purple-500/30 text-xs text-gray-500 italic max-h-60 overflow-y-auto">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {thinking}
+                    </ReactMarkdown>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // Memoized Message Component to prevent re-renders breaking selection
 // We pass primitives (role, content) instead of the full object to avoid reference equality issues with mutable store state
-const ChatMessage = React.memo(({ role, content, index, isPlaying, isLoadingAudio, onPlayAudio }) => {
+const ChatMessage = React.memo(({ role, content, thinking, isThinking, index, isPlaying, isLoadingAudio, onPlayAudio }) => {
     // Extract token usage if present. Backend appends it for each step (tool use, etc.)
     // We want to cleaner display: remove ALL distinct token strings from the text,
     // and show the FINAL one in the footer.
@@ -250,6 +279,7 @@ const ChatMessage = React.memo(({ role, content, index, isPlaying, isLoadingAudi
     return (
         <div className={`flex ${role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`relative max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed select-text ${role === 'user' ? 'bg-blue-600/90 text-white rounded-br-none' : 'bg-gray-800 text-gray-200 rounded-bl-none border border-gray-700'}`}>
+                {role === 'assistant' && <ThinkingBlock thinking={thinking} isThinking={isThinking} />}
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                     p: ({ node, ...props }) => <p className="mb-2 last:mb-0 select-text" {...props} />,
                     h1: ({ node, ...props }) => <h1 className="text-xl font-bold mb-2 select-text" style={{ color: 'var(--md-heading)' }} {...props} />,

@@ -187,43 +187,68 @@ async def chat_in_thread(workspace_id: str, thread_id: str, request: ChatRequest
     }
     
     async def event_generator():
-        full_response = ""
+        full_raw = ""  # All raw LLM output (for thinking/response separation at end)
+        full_extra = ""  # Non-LLM content (tool indicators, token usage)
+
+        from app.llm_config import llm_config as _llm_config
+        from app.utils.thinking import strip_thinking, extract_thinking
+        thinking_enabled = _llm_config.get_config().thinking_enabled
+
+        # When thinking is disabled, buffer to strip think tags before yielding
+        strip_buffer = ""
+
         try:
             # astream_events yields events from all nodes/tools/llms
             async for event in app_agent.astream_events(initial_state, version="v1", config={"recursion_limit": 100}):
                 kind = event["event"]
                 name = event.get("name", "")
-                
+
                 # 1. Output LLM Tokens (Chat Response)
                 if kind == "on_chat_model_stream":
-                    # Only stream tokens from the final generation node (avoid internal LLM calls like json extraction)
+                    # Only stream tokens from the generate node
                     if event.get("metadata", {}).get("langgraph_node") == "generate":
                         content = event["data"]["chunk"].content
-                        if content:
-                            full_response += content
-                            yield content
+                        if not content:
+                            continue
+
+                        if not thinking_enabled:
+                            # Strip think tags silently
+                            strip_buffer += content
+                            # Only buffer if we see an explicit <think> without closing tag yet
+                            if "<think>" in strip_buffer and "</think>" not in strip_buffer:
+                                continue
+                            if "<think>" in strip_buffer or "</think>" in strip_buffer:
+                                # Has think tags - strip them
+                                clean = strip_thinking(strip_buffer)
+                            else:
+                                # No think tags - yield as-is (preserves whitespace)
+                                clean = strip_buffer
+                            if clean:
+                                full_raw += strip_buffer
+                                yield clean
+                            strip_buffer = ""
+                            continue
+
+                        # Thinking enabled: yield raw content, frontend handles display
+                        full_raw += content
+                        yield content
 
                 # 1.5 Capture Token Usage
                 elif kind == "on_chat_model_end":
                      if event.get("metadata", {}).get("langgraph_node") == "generate":
-                         # Only final node
                          output_data = event["data"]["output"]
-                         # output_data might be an AIMessage object OR a dict depending on serializer
                          usage = None
-                         
-                         # Check for usage in standard location
+
                          if hasattr(output_data, "usage_metadata"):
                              usage = output_data.usage_metadata
                          elif isinstance(output_data, dict):
                              usage = output_data.get("usage_metadata")
-                             
-                             # Fallback: Check nested generations (common for some providers/LangChain versions)
+
                              if not usage and "generations" in output_data:
                                  try:
                                      gens = output_data["generations"]
                                      if gens and len(gens) > 0 and gens[0]:
                                          first_gen = gens[0][0]
-                                         # Check if generation is dict (serialized) or object
                                          if isinstance(first_gen, dict):
                                               msg = first_gen.get("message")
                                               if hasattr(msg, "usage_metadata"):
@@ -234,37 +259,43 @@ async def chat_in_thread(workspace_id: str, thread_id: str, request: ChatRequest
                                                   usage = msg.usage_metadata
                                  except Exception as e:
                                      print(f"Error extracting usage from generations: {e}")
-                             
+
                          if usage:
                              input_tokens = usage.get("input_tokens", 0)
                              output_tokens = usage.get("output_tokens", 0)
                              usage_str = f"\n\n*(Tokens: {input_tokens} input, {output_tokens} output)*"
-                             
-                             # Append to full response for storage
-                             full_response += usage_str
-                             # Stream via yield
+                             full_extra += usage_str
                              yield usage_str
 
                 # 2. Output Tool Usage (Progress Indicators)
                 elif kind == "on_tool_start" and name not in ["tools", "__start__"]:
-                    # We want to show real tools, not the "tools" node itself
-                    # Format as a distinct block
                     yield f"\n> 🛠️ **Usage**: `{name}`\n\n"
-                    
-                # 3. Output Tool Result (Optional, maybe for debugging or verbose mode?)
-                # For now, let's just show start.
-                        
+
         except Exception as e:
             print(f"Streaming Error: {e}")
             import traceback
             traceback.print_exc()
             yield f"\n[Error: {str(e)}]"
-            
-        # 4. Save History (After stream completes)
-        # Re-read to minimize race conditions? Ideally yes, but single user for now.
-        # We append the user message and the full AI response.
+
+        # Flush remaining strip buffer (thinking_disabled path)
+        if strip_buffer:
+            clean = strip_thinking(strip_buffer)
+            if clean:
+                full_raw += strip_buffer
+                yield clean
+
+        # Separate thinking from response for storage
+        thinking, clean_response = extract_thinking(full_raw)
+        # Append token usage to the clean response for storage
+        full_response = clean_response + full_extra
+
+        # Save History
         thread_data["messages"].append({"role": "user", "content": request.message})
-        thread_data["messages"].append({"role": "assistant", "content": full_response})
+        thread_data["messages"].append({
+            "role": "assistant",
+            "content": full_response,
+            "thinking": thinking if thinking else None
+        })
         
         # Update title if needed
         # Logic: If this is the FIRST interaction (2 messages: user + assistant), generate a title.
@@ -284,7 +315,8 @@ async def chat_in_thread(workspace_id: str, thread_id: str, request: ChatRequest
                 Title:"""
                 
                 title_resp = llm.invoke([HumanMessage(content=title_prompt)])
-                new_title = strip_markdown_from_title(title_resp.content.strip().strip('"'))
+                from app.utils.thinking import strip_thinking
+                new_title = strip_markdown_from_title(strip_thinking(title_resp.content).strip('"'))
                 thread_data["title"] = new_title
              except Exception as e:
                  print(f"Title Generation Failed: {e}")
