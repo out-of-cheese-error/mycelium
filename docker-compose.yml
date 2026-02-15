@@ -4,11 +4,18 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/memory_data:/app/memory_data  # Persist Memory (Graph + Chroma + Notes)
-      - ./backend/logs:/app/logs                # Persist logs
-      - ./backend/llm_config.json:/app/llm_config.json # Config persistence
+      # Persist Memory (Graph + Chroma + Notes) - configurable via .env
+      - ${MEMORY_DATA_PATH:-./backend/memory_data}:/app/memory_data
+      # Persist logs
+      - ${LOGS_PATH:-./backend/logs}:/app/logs
+      # Config persistence - mount directory instead of file to avoid issues
+      - ${CONFIG_PATH:-./backend}:/app/config
     environment:
       - ALLOW_ORIGINS=*
+      # Set the config file path to use the volume mount
+      - LLM_CONFIG_FILE=/app/config/llm_config.json
+      # Set the memory base directory
+      - MEMORY_BASE_DIR=/app/memory_data
 
   frontend:
     build: ./frontend

@@ -3,7 +3,8 @@ from typing import Literal, List, Dict, Optional
 import os
 import json
 
-CONFIG_FILE = "llm_config.json"
+# Config file path is configurable via environment variable
+CONFIG_FILE = os.environ.get("LLM_CONFIG_FILE", "llm_config.json")
 
 class MCPServerConfig(BaseModel):
     """Configuration for an MCP (Model Context Protocol) server."""

@@ -161,13 +161,45 @@ cd graph-llm
 #### Option 1: Running with Docker (Recommended)
 
 1. **Prerequisites**: Ensure you have [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed.
-2. **Run the application**:
+
+2. **Configure paths (Optional)**: Create a `.env` file to customize where your data is stored:
+   ```bash
+   cp .env.example .env
+   # Edit .env to set custom paths for memory data, logs, and config
+   ```
+
+   **Example .env configuration:**
+   ```bash
+   # Store memory data in a custom location
+   MEMORY_DATA_PATH=/path/to/your/memory-data
+
+   # Store logs in a custom location
+   LOGS_PATH=/path/to/your/logs
+
+   # Store config in a custom location (directory containing llm_config.json)
+   CONFIG_PATH=/path/to/your/config
+   ```
+
+   If you don't create a `.env` file, the default paths (`./backend/memory_data`, `./backend/logs`, `./backend`) will be used.
+
+3. **Ensure config file exists**: Before first run, make sure `llm_config.json` exists:
+   ```bash
+   cd backend
+   cp llm_config.example.json llm_config.json
+   # Edit llm_config.json with your settings
+   cd ..
+   ```
+
+4. **Run the application**:
    ```bash
    docker-compose up --build
    ```
-3. **Access the App**:
+
+5. **Access the App**:
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000/docs
+
+**Note**: Config changes made through the UI or by editing `llm_config.json` will persist across container restarts.
 
 #### Option 2: Manual Installation
 
@@ -234,7 +266,25 @@ See the [Configuration](#configuration) section for provider-specific examples.
 
 > **Tip:** You can configure these settings through the **Global Settings** menu in the application UI instead of manually editing the JSON file.
 
+### LLM Provider Configuration
+
 Edit `backend/llm_config.json` with your preferred provider:
+
+### Data Storage Configuration
+
+You can customize where MyCelium stores its data by creating a `.env` file in the project root:
+
+```bash
+cp .env.example .env
+```
+
+Then edit the `.env` file to set custom paths:
+
+- **MEMORY_DATA_PATH**: Where knowledge graphs, embeddings, and notes are stored (default: `./backend/memory_data`)
+- **LOGS_PATH**: Where application logs are stored (default: `./backend/logs`)
+- **CONFIG_PATH**: Directory containing `llm_config.json` (default: `./backend`)
+
+This is particularly useful when running with Docker, as it allows you to persist data outside the project directory or on different drives.
 
 ### Ollama
 

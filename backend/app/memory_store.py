@@ -8,7 +8,8 @@ import uuid
 import threading
 from app.llm_config import llm_config
 
-MEMORY_BASE_DIR = "./memory_data"
+# Memory directory is configurable via environment variable
+MEMORY_BASE_DIR = os.environ.get("MEMORY_BASE_DIR", "./memory_data")
 
 # Per-workspace locks to prevent concurrent writes
 _workspace_locks = {}

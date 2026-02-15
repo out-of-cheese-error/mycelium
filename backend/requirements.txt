@@ -7,7 +7,6 @@ langchain-ollama
 langchain-community
 networkx
 chromadb
-sentence-transformers
 pydantic
 python-dotenv
 duckduckgo-search
