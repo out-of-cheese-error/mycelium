@@ -135,7 +135,8 @@ Output ONLY the description, no quotes or extra text:"""
 
     try:
         response = await llm.ainvoke([HumanMessage(content=prompt)])
-        description = response.content.strip()
+        from app.utils.thinking import strip_thinking
+        description = strip_thinking(response.content)
         # Clean up any quotes
         description = description.strip('"\'')
         return description

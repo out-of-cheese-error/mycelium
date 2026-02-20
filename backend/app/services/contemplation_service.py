@@ -167,10 +167,11 @@ async def contemplate_logic(workspace_id: str, n: int = 3, topic: str = None, sa
     try:
         resp = await llm.ainvoke([HumanMessage(content=prompt)])
         log(f"Phase 1 - Curiosity (LLM Thought):\n{resp.content}", type="thought")
-        
+
         # Robust JSON extraction
         import re
-        content = resp.content.strip()
+        from app.utils.thinking import strip_thinking
+        content = strip_thinking(resp.content)
         # Try to find JSON list or object
         match = re.search(r"(\[.*\]|\{.*\})", content, re.DOTALL)
         if match:
@@ -245,7 +246,8 @@ async def contemplate_logic(workspace_id: str, n: int = 3, topic: str = None, sa
                     Reply ONLY with "YES" or "NO".
                     """
                     check_resp = await llm.ainvoke([HumanMessage(content=check_prompt)])
-                    answer = check_resp.content.strip().upper()
+                    from app.utils.thinking import strip_thinking
+                    answer = strip_thinking(check_resp.content).upper()
                     # print(f"DEBUG: Internal check for '{q}': {answer}")
                     
                     if "YES" in answer:
@@ -334,7 +336,8 @@ async def contemplate_logic(workspace_id: str, n: int = 3, topic: str = None, sa
         synthesis_resp = await llm.ainvoke([HumanMessage(content=synthesis_prompt)])
         log(f"Synthesis (LLM Analysis):\n{synthesis_resp.content}", type="thought")
         import re
-        match = re.search(r"\{.*\}", synthesis_resp.content, re.DOTALL)
+        from app.utils.thinking import strip_thinking
+        match = re.search(r"\{.*\}", strip_thinking(synthesis_resp.content), re.DOTALL)
         if match:
             try:
                 data = json.loads(match.group(0))

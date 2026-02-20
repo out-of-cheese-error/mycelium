@@ -84,8 +84,9 @@ class ConceptService:
                     timeout=30.0
                 )
                 print(f"DEBUG: LLM response received for cluster {i}.")
-                content = response.content
-                
+                from app.utils.thinking import strip_thinking
+                content = strip_thinking(response.content)
+
                 # Basic JSON parsing
                 match = re.search(r"\{.*\}", content, re.DOTALL)
                 if match:

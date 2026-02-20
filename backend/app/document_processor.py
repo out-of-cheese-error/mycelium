@@ -158,8 +158,9 @@ async def process_file(file_path: str, workspace_id: str, chunk_size: int = 4800
                     done, pending = await asyncio.wait([llm_task], timeout=1.0)
                 
                 response = llm_task.result()
-                content = response.content
-                
+                from app.utils.thinking import strip_thinking
+                content = strip_thinking(response.content)
+
                 match = re.search(r"\{.*\}", content, re.DOTALL)
                 if match:
                     json_str = match.group(0)

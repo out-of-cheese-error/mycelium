@@ -49,6 +49,9 @@ class LLMConfigModel(BaseModel):
     tts_voice: str = "en-Emma_woman"
     tts_enabled: bool = True
 
+    # Thinking Model Support
+    thinking_enabled: bool = True  # Parse and display <think> blocks from thinking models (QwQ, Qwen3, DeepSeek R1)
+
     # Reddit Settings
     reddit_user_agent: str = "python:graph_chat_agent:v1.0 (public access)"
 

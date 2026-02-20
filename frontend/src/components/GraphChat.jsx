@@ -1,8 +1,31 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, X, MessageSquare, Minimize2, Maximize2, Trash2, ExternalLink, Settings, Plus } from 'lucide-react';
+import { Send, X, MessageSquare, Minimize2, Maximize2, Trash2, ExternalLink, Settings, Plus, ChevronRight } from 'lucide-react';
 import { useStore } from '../store';
+
+// Compact thinking block for graph chat panel
+const GraphThinkingBlock = ({ thinking, isThinking }) => {
+    const [expanded, setExpanded] = useState(false);
+    if (!thinking && !isThinking) return null;
+    return (
+        <div className="mb-1.5">
+            <button
+                onClick={() => setExpanded(!expanded)}
+                className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-300 transition-colors"
+            >
+                {isThinking && <div className="w-1 h-1 bg-purple-500 rounded-full animate-pulse" />}
+                <ChevronRight size={10} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
+                {isThinking ? 'Thinking...' : 'Thought process'}
+            </button>
+            {expanded && thinking && (
+                <div className="mt-1 pl-2 border-l border-purple-500/30 text-[10px] text-gray-500 italic max-h-40 overflow-y-auto">
+                    {thinking}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const GraphChat = () => {
     const {
@@ -252,34 +275,37 @@ const GraphChat = () => {
                                     }`}
                             >
                                 {m.role === 'assistant' ? (
-                                    <ReactMarkdown
-                                        remarkPlugins={[remarkGfm]}
-                                        components={{
-                                            p: ({ node, ...props }) => (
-                                                <p className="mb-1.5 last:mb-0" {...props} />
-                                            ),
-                                            code: ({ node, inline, ...props }) =>
-                                                inline ? (
-                                                    <code
-                                                        className="bg-black/30 px-1 py-0.5 rounded text-xs font-mono"
-                                                        {...props}
-                                                    />
-                                                ) : (
-                                                    <code
-                                                        className="text-xs font-mono"
+                                    <>
+                                        <GraphThinkingBlock thinking={m.thinking} isThinking={m.isThinking} />
+                                        <ReactMarkdown
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                                p: ({ node, ...props }) => (
+                                                    <p className="mb-1.5 last:mb-0" {...props} />
+                                                ),
+                                                code: ({ node, inline, ...props }) =>
+                                                    inline ? (
+                                                        <code
+                                                            className="bg-black/30 px-1 py-0.5 rounded text-xs font-mono"
+                                                            {...props}
+                                                        />
+                                                    ) : (
+                                                        <code
+                                                            className="text-xs font-mono"
+                                                            {...props}
+                                                        />
+                                                    ),
+                                                pre: ({ node, ...props }) => (
+                                                    <pre
+                                                        className="bg-black/30 p-2 rounded my-1 overflow-x-auto text-xs"
                                                         {...props}
                                                     />
                                                 ),
-                                            pre: ({ node, ...props }) => (
-                                                <pre
-                                                    className="bg-black/30 p-2 rounded my-1 overflow-x-auto text-xs"
-                                                    {...props}
-                                                />
-                                            ),
-                                        }}
-                                    >
-                                        {m.content || (graphChatLoading && i === graphChatMessages.length - 1 ? '...' : '')}
-                                    </ReactMarkdown>
+                                            }}
+                                        >
+                                            {m.content || (graphChatLoading && i === graphChatMessages.length - 1 ? '...' : '')}
+                                        </ReactMarkdown>
+                                    </>
                                 ) : (
                                     m.content
                                 )}

@@ -614,8 +614,9 @@ async def generate_persona(workspace_id: str, request: GeneratePersonaRequest):
     
     try:
         response = llm.invoke([HumanMessage(content=prompt)])
-        content = response.content.strip()
-        
+        from app.utils.thinking import strip_thinking
+        content = strip_thinking(response.content)
+
         # Clean markdown
         import re
         match = re.search(r"\{.*\}", content, re.DOTALL)

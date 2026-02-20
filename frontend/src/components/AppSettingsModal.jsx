@@ -866,6 +866,29 @@ const AppSettingsModal = ({ onClose }) => {
                                     onChange={e => setConfig({ ...config, temperature: parseFloat(e.target.value) })}
                                 />
                             </div>
+
+                            {/* Thinking Model Support */}
+                            <div className="flex items-center justify-between p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                <div>
+                                    <h4 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Thinking Display</h4>
+                                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Show reasoning from models that use &lt;think&gt; tags (QwQ, Qwen3, DeepSeek R1)</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={config.thinking_enabled ?? true}
+                                        onChange={e => setConfig({ ...config, thinking_enabled: e.target.checked })}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:rounded-full after:h-5 after:w-5 after:transition-all"
+                                        style={{
+                                            backgroundColor: config.thinking_enabled ?? true ? 'var(--accent)' : 'var(--bg-tertiary)',
+                                        }}>
+                                        <div className={`absolute top-[2px] ${config.thinking_enabled ?? true ? 'left-[22px]' : 'left-[2px]'} w-5 h-5 rounded-full transition-all`}
+                                            style={{ backgroundColor: 'var(--text-primary)' }} />
+                                    </div>
+                                </label>
+                            </div>
                         </div>
                     )}
 

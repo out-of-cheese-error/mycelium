@@ -109,8 +109,9 @@ IMPORTANT: Only include groups with 2+ nodes. Output ONLY valid JSON.
     try:
         log("Querying LLM to identify duplicate groups...")
         response = await llm.ainvoke([HumanMessage(content=prompt)])
-        content = response.content.strip()
-        
+        from app.utils.thinking import strip_thinking
+        content = strip_thinking(response.content)
+
         # Extract JSON from response
         import re
         match = re.search(r"\{.*\}", content, re.DOTALL)

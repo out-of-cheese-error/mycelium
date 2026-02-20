@@ -140,8 +140,9 @@ GUIDELINES:
     try:
         log("Querying LLM to generate proposals...")
         response = await llm.ainvoke([HumanMessage(content=prompt)])
-        content = response.content.strip()
-        
+        from app.utils.thinking import strip_thinking
+        content = strip_thinking(response.content)
+
         # Extract JSON from response
         import re
         match = re.search(r"\{.*\}", content, re.DOTALL)
