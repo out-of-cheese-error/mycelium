@@ -1,4 +1,4 @@
-import { MessageSquare, Network, Notebook, BookOpen, Layers, Flame, Route, BrainCircuit, Compass } from 'lucide-react';
+import { MessageSquare, Network, Notebook, BookOpen, Layers, Flame, Route, BrainCircuit, Compass, Phone } from 'lucide-react';
 
 /**
  * Central registry of all available tabs.
@@ -20,6 +20,7 @@ export const TAB_REGISTRY = [
     { id: 'connectors', label: 'Connectors', icon: Route, description: 'Find connections and pathways between different concepts in your knowledge base.' },
     { id: 'grow', label: 'Grow', icon: BrainCircuit, description: 'Expand your knowledge graph by ingesting new documents, URLs, and content.' },
     { id: 'theWay', label: 'theWay', icon: Compass, activeColor: 'bg-purple-600', description: 'Custom skills and workflows to enhance your AI assistant\'s capabilities.' },
+    { id: 'call', label: 'Call', icon: Phone, activeColor: 'bg-green-600', description: 'Live voice conversation with your AI assistant.' },
 ];
 
 /**

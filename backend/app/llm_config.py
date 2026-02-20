@@ -49,6 +49,10 @@ class LLMConfigModel(BaseModel):
     tts_voice: str = "en-Emma_woman"
     tts_enabled: bool = True
 
+    # ASR Settings (uses faster-whisper in the TTS container)
+    asr_enabled: bool = False
+    asr_language: str = "en"  # language code or "auto" for auto-detect
+
     # Thinking Model Support
     thinking_enabled: bool = True  # Parse and display <think> blocks from thinking models (QwQ, Qwen3, DeepSeek R1)
 
@@ -72,7 +76,8 @@ class LLMConfigModel(BaseModel):
         "hot_topics": True,
         "connectors": True,
         "grow": True,
-        "theWay": True
+        "theWay": True,
+        "call": False
     }
 
     # MCP (Model Context Protocol) Servers

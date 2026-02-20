@@ -14,6 +14,7 @@ import ConnectorsArea from './components/ConnectorsArea';
 import GrowArea from './components/GrowArea';
 import GraphChat from './components/GraphChat';
 import SkillsArea from './components/SkillsArea';
+import CallArea from './components/CallArea';
 import { ThemeProvider, applyThemeToDOM } from './components/ThemeProvider';
 
 function App() {
@@ -391,6 +392,11 @@ function App() {
                         < div className={`absolute inset-0 z-10 bg-gray-900 ${activeView === 'theWay' ? 'block' : 'hidden'}`}>
                             <SkillsArea />
                         </div >
+
+                        {/* CALL VIEW */}
+                        <div className={`absolute inset-0 z-10 ${activeView === 'call' ? 'block' : 'hidden'}`}>
+                            <CallArea />
+                        </div>
 
                         {/* CHAT VIEW (Overlay on top if active) */}
                         {

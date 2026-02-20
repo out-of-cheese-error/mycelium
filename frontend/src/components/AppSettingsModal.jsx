@@ -86,6 +86,9 @@ const AppSettingsModal = ({ onClose }) => {
         tts_model: '',
         tts_voice: '',
         tts_enabled: false,
+        // ASR Settings
+        asr_enabled: false,
+        asr_language: 'en',
         // UI Settings
         theme: 'dark',
         accent_color: '#8b5cf6',
@@ -129,6 +132,9 @@ const AppSettingsModal = ({ onClose }) => {
                     tts_model: data.tts_model || '',
                     tts_voice: data.tts_voice || '',
                     tts_enabled: data.tts_enabled || false,
+                    // ASR Settings
+                    asr_enabled: data.asr_enabled || false,
+                    asr_language: data.asr_language || 'en',
                     reddit_user_agent: data.reddit_user_agent || '',
                     // UI Settings
                     theme: data.theme || 'dark',
@@ -1016,6 +1022,55 @@ const AppSettingsModal = ({ onClose }) => {
                                          ttsTestStatus === 'error' ? ttsTestDetail :
                                          'Test Connection'}
                                     </button>
+                                </div>
+                            )}
+
+                            {/* ASR (Speech Recognition) */}
+                            <div className="flex items-center justify-between p-4 rounded-lg border mt-4" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                <div>
+                                    <h4 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Enable Speech Recognition (ASR)</h4>
+                                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Required for the Call tab (uses faster-whisper in the TTS container)</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={config.asr_enabled}
+                                        onChange={e => setConfig({ ...config, asr_enabled: e.target.checked })}
+                                        className="sr-only peer"
+                                    />
+                                    <div
+                                        className="w-11 h-6 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"
+                                        style={{
+                                            backgroundColor: config.asr_enabled ? 'var(--accent)' : 'var(--bg-tertiary)',
+                                        }}
+                                    />
+                                </label>
+                            </div>
+
+                            {config.asr_enabled && (
+                                <div className="space-y-4 p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                    <div>
+                                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Language</label>
+                                        <select
+                                            className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                            style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                            value={config.asr_language || 'en'}
+                                            onChange={e => setConfig({ ...config, asr_language: e.target.value })}
+                                        >
+                                            <option value="auto">Auto-detect</option>
+                                            <option value="en">English</option>
+                                            <option value="es">Spanish</option>
+                                            <option value="fr">French</option>
+                                            <option value="de">German</option>
+                                            <option value="it">Italian</option>
+                                            <option value="pt">Portuguese</option>
+                                            <option value="nl">Dutch</option>
+                                            <option value="pl">Polish</option>
+                                            <option value="ja">Japanese</option>
+                                            <option value="ko">Korean</option>
+                                            <option value="zh">Chinese</option>
+                                        </select>
+                                    </div>
                                 </div>
                             )}
                         </div>

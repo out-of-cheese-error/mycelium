@@ -10,3 +10,4 @@ fastapi
 uvicorn[standard]
 huggingface_hub
 requests
+faster-whisper
