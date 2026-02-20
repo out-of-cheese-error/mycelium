@@ -1,0 +1,12 @@
+torch>=2.1.0
+transformers==4.51.3
+accelerate
+diffusers
+librosa
+scipy
+numpy
+pydub
+fastapi
+uvicorn[standard]
+huggingface_hub
+requests

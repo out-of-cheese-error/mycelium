@@ -23,7 +23,7 @@ MyCelium combines the power of LLMs with a knowledge graph to create an AI assis
 - **Hot Topics & Connectors** - Discover the most important and bridging nodes in your graph
 - **Reddit Integration** - Search and browse Reddit discussions
 - **Emotional State System** - The bot has emotions that evolve based on interactions
-- **Text-to-Speech** - Generate audio lessons from your knowledge
+- **Text-to-Speech** - Built-in streaming TTS powered by [VibeVoice](https://github.com/microsoft/VibeVoice) with 19 voices (optional, GPU-accelerated)
 - **Growth Engine** - Let the bot explore and expand its knowledge autonomously
 - **theWay (Skills)** - Teach the AI reusable skills it can look up and follow
 - **Chrome Extension** - Browser sidebar for quick chat and one-click page ingestion
@@ -198,6 +198,8 @@ cd graph-llm
 5. **Access the App**:
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000/docs
+
+6. **(Optional) Enable Text-to-Speech**: See the [Text-to-Speech](#text-to-speech-optional) section below.
 
 **Note**: Config changes made through the UI or by editing `llm_config.json` will persist across container restarts.
 
@@ -374,6 +376,94 @@ You can use different providers for chat (LLM) and embeddings. For example, use 
 
 ---
 
+## Text-to-Speech (Optional)
+
+MyCelium includes a self-hosted streaming TTS service powered by [VibeVoice-Realtime-0.5B](https://github.com/microsoft/VibeVoice) from Microsoft. It runs as a separate Docker container with GPU acceleration and streams audio in real time.
+
+### Requirements
+
+- **NVIDIA GPU** with at least ~2GB VRAM
+- **NVIDIA Container Toolkit** ([installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html))
+- Docker with GPU support
+
+### Starting with TTS
+
+The TTS service uses a Docker Compose profile so it won't start by default:
+
+```bash
+# Start everything including TTS
+docker-compose --profile tts up --build
+
+# Or start just the TTS service alongside an already-running stack
+docker-compose --profile tts up tts
+```
+
+On the first run, the container will:
+1. Download the VibeVoice-Realtime-0.5B model weights (~1GB) from HuggingFace
+2. Download 19 voice preset files from GitHub
+
+Both are cached in Docker volumes (`tts_cache` and `tts_voices`) so subsequent starts are fast.
+
+### Configuration
+
+Once the TTS service is running, enable it in the UI:
+
+1. Open **Settings** (gear icon)
+2. Go to the **Audio** tab
+3. Toggle **Enable TTS** on
+4. The defaults should work out of the box:
+   - **Base URL**: `http://tts:8100/v1`
+   - **Model**: `VibeVoice-Realtime-0.5B`
+   - **Voice**: `en-Emma_woman`
+5. Click **Test Connection** to verify — on success, the voice field becomes a dropdown with all available voices
+
+Or set it directly in `llm_config.json`:
+
+```json
+{
+  "tts_base_url": "http://tts:8100/v1",
+  "tts_model": "VibeVoice-Realtime-0.5B",
+  "tts_voice": "en-Emma_woman",
+  "tts_enabled": true
+}
+```
+
+### Custom Volume Paths
+
+You can customize where TTS data is stored via `.env`:
+
+```bash
+TTS_CACHE_PATH=/path/to/hf-model-cache
+TTS_VOICES_PATH=/path/to/voice-presets
+```
+
+### Available Voices
+
+19 voice presets are included, covering English, Chinese, French, German, Hindi, and Portuguese:
+
+| Voice | Language | Gender |
+|-------|----------|--------|
+| en-Emma_woman | English | Female |
+| en-Jess_woman | English | Female |
+| en-River_woman | English | Female |
+| en-Alice_woman | English | Female |
+| en-Leo_man | English | Male |
+| en-Dan_man | English | Male |
+| zh-Xiaoxiao_woman | Chinese | Female |
+| zh-Yunjian_man | Chinese | Male |
+| fr-Denise_woman | French | Female |
+| fr-Henri_man | French | Male |
+| de-Amala_woman | German | Female |
+| de-Conrad_man | German | Male |
+| hi-Swara_woman | Hindi | Female |
+| hi-Madhur_man | Hindi | Male |
+| pt-Francisca_woman | Portuguese | Female |
+| pt-Antonio_man | Portuguese | Male |
+
+> **Note:** Emojis and special symbols are automatically stripped from text before sending to TTS to prevent garbled output.
+
+---
+
 
 ## Running Locally
 
@@ -497,12 +587,13 @@ The UI will be available at `http://localhost:5173`
 | `/workspaces/{id}/scripts` | GET | List scripts |
 | `/workspaces/{id}/scripts/{script_id}` | DELETE | Delete a script |
 
-### Audio
+### Audio (TTS)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/audio/speech` | POST | Generate speech from text |
-| `/audio/stream` | GET | Stream audio |
+| `/audio/speech` | POST | Generate speech from text (streaming WAV) |
+| `/audio/stream` | GET | Stream audio via query parameter |
+| `/audio/test` | GET | Test TTS connectivity and list voices |
 
 ### System
 

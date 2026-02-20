@@ -23,3 +23,30 @@ services:
       - "3000:80"
     depends_on:
       - backend
+
+  tts:
+    profiles: ["tts"]
+    build: ./tts
+    ports:
+      - "8100:8100"
+    volumes:
+      # Persist HuggingFace model cache across restarts
+      - ${TTS_CACHE_PATH:-tts_cache}:/app/hf_cache
+      # Persist downloaded voice presets
+      - ${TTS_VOICES_PATH:-tts_voices}:/app/voices
+    environment:
+      - MODEL_PATH=microsoft/VibeVoice-Realtime-0.5B
+      - MODEL_DEVICE=cuda
+      - VOICES_DIR=/app/voices/streaming_model
+      - HF_HOME=/app/hf_cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  tts_cache:
+  tts_voices:

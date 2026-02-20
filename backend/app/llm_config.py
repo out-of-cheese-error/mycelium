@@ -44,8 +44,8 @@ class LLMConfigModel(BaseModel):
     ingestion_ollama_model: str = "llama3.2"  # Used when ingestion_provider is "ollama"
 
     # TTS Settings
-    tts_base_url: str = "http://localhost:3000/v1"
-    tts_model: str = "tts-1"
+    tts_base_url: str = "http://tts:8100/v1"
+    tts_model: str = "VibeVoice-Realtime-0.5B"
     tts_voice: str = "en-Emma_woman"
     tts_enabled: bool = True
 

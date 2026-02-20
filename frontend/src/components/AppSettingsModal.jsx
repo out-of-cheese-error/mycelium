@@ -56,6 +56,11 @@ const AppSettingsModal = ({ onClose }) => {
     const [connectionStatus, setConnectionStatus] = useState(null); // null, 'loading', 'success', 'error'
     const [connectionError, setConnectionError] = useState('');
 
+    // TTS state
+    const [availableVoices, setAvailableVoices] = useState([]);
+    const [ttsTestStatus, setTtsTestStatus] = useState(null); // null, 'loading', 'success', 'error'
+    const [ttsTestDetail, setTtsTestDetail] = useState('');
+
     const [config, setConfig] = useState({
         provider: 'lmstudio',
         embedding_provider: 'lmstudio',
@@ -925,7 +930,7 @@ const AppSettingsModal = ({ onClose }) => {
                                             style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
                                             value={config.tts_base_url || ''}
                                             onChange={e => setConfig({ ...config, tts_base_url: e.target.value })}
-                                            placeholder="http://localhost:3000/v1"
+                                            placeholder="http://tts:8100/v1"
                                         />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
@@ -936,20 +941,81 @@ const AppSettingsModal = ({ onClose }) => {
                                                 style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
                                                 value={config.tts_model || ''}
                                                 onChange={e => setConfig({ ...config, tts_model: e.target.value })}
-                                                placeholder="tts-1"
+                                                placeholder="VibeVoice-Realtime-0.5B"
                                             />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Voice</label>
-                                            <input
-                                                className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
-                                                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
-                                                value={config.tts_voice || ''}
-                                                onChange={e => setConfig({ ...config, tts_voice: e.target.value })}
-                                                placeholder="alloy"
-                                            />
+                                            {availableVoices.length > 0 ? (
+                                                <select
+                                                    className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                    style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                    value={config.tts_voice || ''}
+                                                    onChange={e => setConfig({ ...config, tts_voice: e.target.value })}
+                                                >
+                                                    {!config.tts_voice && <option value="">Select a voice...</option>}
+                                                    {availableVoices.map(v => (
+                                                        <option key={v} value={v}>{v}</option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <input
+                                                    className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                    style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                    value={config.tts_voice || ''}
+                                                    onChange={e => setConfig({ ...config, tts_voice: e.target.value })}
+                                                    placeholder="en-Emma_woman"
+                                                />
+                                            )}
                                         </div>
                                     </div>
+                                    <button
+                                        className="w-full mt-3 px-4 py-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                        style={{
+                                            backgroundColor: ttsTestStatus === 'success' ? 'var(--bg-tertiary)' : 'var(--bg-tertiary)',
+                                            color: ttsTestStatus === 'success' ? '#10b981' : ttsTestStatus === 'error' ? '#ef4444' : 'var(--text-secondary)',
+                                            border: `1px solid ${ttsTestStatus === 'success' ? '#10b981' : ttsTestStatus === 'error' ? '#ef4444' : 'var(--border-color)'}`
+                                        }}
+                                        disabled={ttsTestStatus === 'loading'}
+                                        onClick={async () => {
+                                            setTtsTestStatus('loading');
+                                            setTtsTestDetail('');
+                                            try {
+                                                const API_base = localStorage.getItem('mycelium_api_url') || import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+                                                const res = await fetch(`${API_base}/audio/test`);
+                                                if (!res.ok) {
+                                                    setTtsTestStatus('error');
+                                                    setTtsTestDetail(`Backend returned ${res.status}`);
+                                                    return;
+                                                }
+                                                const data = await res.json();
+                                                if (data.status === 'connected') {
+                                                    setTtsTestStatus('success');
+                                                    setTtsTestDetail(data.model || 'Connected');
+                                                    if (data.voices && data.voices.length > 0) {
+                                                        setAvailableVoices(data.voices);
+                                                        if (!config.tts_voice && data.default) {
+                                                            setConfig(prev => ({ ...prev, tts_voice: data.default }));
+                                                        }
+                                                    }
+                                                } else {
+                                                    setTtsTestStatus('error');
+                                                    setTtsTestDetail(data.detail || 'Unknown error');
+                                                }
+                                            } catch (e) {
+                                                setTtsTestStatus('error');
+                                                setTtsTestDetail(e.message || 'Network error');
+                                            }
+                                        }}
+                                    >
+                                        {ttsTestStatus === 'loading' && <RefreshCw size={14} className="animate-spin" />}
+                                        {ttsTestStatus === 'success' && <Check size={14} />}
+                                        {ttsTestStatus === 'error' && <AlertCircle size={14} />}
+                                        {ttsTestStatus === 'loading' ? 'Testing...' :
+                                         ttsTestStatus === 'success' ? ttsTestDetail :
+                                         ttsTestStatus === 'error' ? ttsTestDetail :
+                                         'Test Connection'}
+                                    </button>
                                 </div>
                             )}
                         </div>

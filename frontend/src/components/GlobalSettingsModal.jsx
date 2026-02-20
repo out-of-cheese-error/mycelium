@@ -305,7 +305,7 @@ const GlobalSettingsModal = ({ onClose }) => {
                                             className="w-full bg-black border border-gray-700 rounded p-2 text-sm text-gray-200"
                                             value={config.tts_model || ''}
                                             onChange={e => setConfig({ ...config, tts_model: e.target.value })}
-                                            placeholder="tts-1"
+                                            placeholder="VibeVoice-Realtime-0.5B"
                                         />
                                     </div>
                                     <div>
@@ -315,7 +315,7 @@ const GlobalSettingsModal = ({ onClose }) => {
                                             className="w-full bg-black border border-gray-700 rounded p-2 text-sm text-gray-200"
                                             value={config.tts_voice || ''}
                                             onChange={e => setConfig({ ...config, tts_voice: e.target.value })}
-                                            placeholder="alloy"
+                                            placeholder="en-Emma_woman"
                                         />
                                     </div>
                                 </div>
