@@ -1182,6 +1182,7 @@ class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], operator.add]
     context: str
     workspace_id: str
+    voice_mode: bool  # When True, responses are concise and conversational (Call tab)
 
 # --- Nodes ---
 
@@ -1433,24 +1434,37 @@ def generate_node(state: AgentState, config: RunnableConfig):
     from datetime import date
     today = date.today().isoformat()
     
+    voice_mode = state.get("voice_mode", False)
+    voice_instruction = ""
+    if voice_mode:
+        voice_instruction = """
+    VOICE MODE (ACTIVE): You are in a live voice call. Your response will be spoken aloud via TTS.
+    - Keep responses SHORT and conversational (1-3 sentences when possible).
+    - Do NOT use markdown, bullet points, numbered lists, code blocks, or any formatting.
+    - Do NOT use emojis or special symbols.
+    - Speak naturally as if in a phone conversation.
+    - Avoid long explanations unless the user explicitly asks for detail.
+    - Never say "here's a list" or "let me break this down" — just answer directly.
+    """
+
     system_prompt = f"""{base_system_prompt}
     TODAY'S DATE: {today}
     CURRENT WORKSPACE ID: {workspace_id}
-
+    {voice_instruction}
     CONTEXT FROM LONG-TERM MEMORY:
     {context}
-    
+
     {emotion_context}
-    
+
     {notes_context}
 
     {tools_section}
-    
+
     If the context is empty, it means you don't recall anything specific about this yet.
     Answer the user's latest message naturally.
-    
+
     IMPORTANT: When using ANY tool, YOU MUST PASS the 'workspace_id' argument as "{workspace_id}" if the tool accepts it. Do not use the default.
-    
+
     GUIDANCE ON CONCEPTS & GRAPH RAG:
     - If the user asks to explore a "Concept" or "Topic", use 'search_concepts' to retrieve the high-level summary and extracted entities.
     - The Concept summary is just a starting point. Your "Graph RAG" (Graph Retrieval) has already provided detailed relationships in the "CONTEXT FROM LONG-TERM MEMORY" section above.

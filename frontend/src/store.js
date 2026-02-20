@@ -86,7 +86,8 @@ export const useStore = create((set, get) => ({
             hot_topics: true,
             connectors: true,
             grow: true,
-            theWay: true
+            theWay: true,
+            call: false
         },
     },
     setUiSettings: (settings) => set({ uiSettings: settings }),
@@ -229,6 +230,127 @@ export const useStore = create((set, get) => ({
 
     getAudioStreamUrl: (text) => {
         return `${API_base}/audio/stream?input=${encodeURIComponent(text)}`;
+    },
+
+    // --- Call (Voice Conversation) State ---
+    callActive: false,
+    callState: 'idle', // idle | connecting | listening | thinking | speaking
+    callTranscript: '',
+    callResponseText: '',
+    callMessages: [],
+    callError: null,
+    _callWs: null,
+
+    startCall: () => {
+        const ws = get().currentWorkspace;
+        const thread = get().currentThread;
+        if (!ws || !thread) {
+            set({ callError: 'Select a workspace and thread first' });
+            return;
+        }
+
+        const wsUrl = `${API_base.replace(/^http/, 'ws')}/call/ws`;
+        const socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => {
+            socket.send(JSON.stringify({
+                type: 'start_call',
+                workspace_id: ws.id,
+                thread_id: thread.id,
+            }));
+            set({ callActive: true, callState: 'connecting', _callWs: socket, callError: null, callMessages: [] });
+        };
+
+        socket.onmessage = (event) => {
+            if (event.data instanceof Blob) {
+                // Binary TTS audio — handled by CallArea component via onCallAudio listener
+                const listeners = get()._callAudioListeners || [];
+                listeners.forEach(fn => fn(event.data));
+                return;
+            }
+
+            const msg = JSON.parse(event.data);
+            switch (msg.type) {
+                case 'call_started':
+                    set({ callState: 'listening' });
+                    break;
+                case 'state':
+                    set({ callState: msg.state });
+                    break;
+                case 'transcript':
+                    if (msg.final) {
+                        set(state => ({
+                            callTranscript: '',
+                            callMessages: [...state.callMessages, { role: 'user', content: msg.text }],
+                        }));
+                    } else {
+                        set({ callTranscript: msg.text });
+                    }
+                    break;
+                case 'response_text':
+                    if (msg.done) {
+                        set(state => ({
+                            callMessages: [...state.callMessages, { role: 'assistant', content: state.callResponseText }],
+                            callResponseText: '',
+                        }));
+                    } else {
+                        set(state => ({ callResponseText: state.callResponseText + msg.text }));
+                    }
+                    break;
+                case 'error':
+                    set({ callError: msg.message });
+                    break;
+                case 'call_ended':
+                    set({ callActive: false, callState: 'idle', _callWs: null });
+                    break;
+            }
+        };
+
+        socket.onerror = () => {
+            set({ callError: 'WebSocket connection error', callActive: false, callState: 'idle', _callWs: null });
+        };
+
+        socket.onclose = () => {
+            set({ callActive: false, callState: 'idle', _callWs: null });
+        };
+    },
+
+    endCall: () => {
+        const socket = get()._callWs;
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'end_call' }));
+        }
+        set({ callActive: false, callState: 'idle', _callWs: null, callResponseText: '' });
+    },
+
+    interruptCall: () => {
+        const socket = get()._callWs;
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'interrupt' }));
+        }
+    },
+
+    sendCallAudio: (pcmBuffer) => {
+        const socket = get()._callWs;
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(pcmBuffer);
+        }
+    },
+
+    sendVadSpeechEnd: () => {
+        const socket = get()._callWs;
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'vad_speech_end' }));
+        }
+    },
+
+    // Audio listener registry (CallArea registers to receive binary TTS blobs)
+    _callAudioListeners: [],
+    addCallAudioListener: (fn) => {
+        set(state => ({ _callAudioListeners: [...state._callAudioListeners, fn] }));
+    },
+    removeCallAudioListener: (fn) => {
+        set(state => ({ _callAudioListeners: state._callAudioListeners.filter(l => l !== fn) }));
     },
 
     createThread: async (workspaceId, title = "New Chat") => {

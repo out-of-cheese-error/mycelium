@@ -1,13 +1,17 @@
 """
-VibeVoice TTS HTTP Streaming Server
+VibeVoice TTS + ASR HTTP Streaming Server
 
 Adapted from the VibeVoice WebSocket demo (demo/web/app.py) to serve
 HTTP POST streaming responses compatible with the MyCelium backend
 audio router contract (backend/app/routers/audio.py).
 
-Endpoint: POST /v1/stream
+TTS Endpoint: POST /v1/stream
   Body: {"input": str, "voice": str, "response_format": "pcm"}
   Response: streaming PCM16 bytes (24kHz, mono, 16-bit)
+
+ASR Endpoint: POST /v1/transcribe
+  Body: raw PCM16 bytes (16kHz, mono, 16-bit)
+  Response: {"text": str, "language": str}
 """
 
 import asyncio
@@ -20,9 +24,10 @@ from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
 import numpy as np
 import torch
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from faster_whisper import WhisperModel
 
 from vibevoice.modular.modeling_vibevoice_streaming_inference import (
     VibeVoiceStreamingForConditionalGenerationInference,
@@ -316,6 +321,9 @@ app = FastAPI(title="VibeVoice TTS Service")
 _inference_lock = asyncio.Lock()
 
 
+ASR_SAMPLE_RATE = 16_000
+
+
 @app.on_event("startup")
 async def _startup() -> None:
     model_path = os.environ.get("MODEL_PATH", "microsoft/VibeVoice-Realtime-0.5B")
@@ -326,6 +334,15 @@ async def _startup() -> None:
 
     app.state.tts_service = service
     print(f"[startup] VibeVoice TTS ready on {device}")
+
+    # Load faster-whisper ASR model
+    asr_model_size = os.environ.get("ASR_MODEL", "tiny")
+    asr_device = os.environ.get("ASR_DEVICE", device)
+    # Use int8 on CUDA to minimize VRAM, float32 on CPU/MPS
+    compute_type = "int8" if asr_device == "cuda" else "float32"
+    print(f"[startup] Loading faster-whisper ASR model: {asr_model_size} on {asr_device} ({compute_type})")
+    app.state.asr_model = WhisperModel(asr_model_size, device=asr_device, compute_type=compute_type)
+    print(f"[startup] ASR model ready")
 
 
 @app.post("/v1/stream")
@@ -380,6 +397,39 @@ async def list_voices():
     }
 
 
+@app.post("/v1/transcribe")
+async def transcribe(request: Request):
+    """Transcribe raw PCM16 audio (16kHz, mono, 16-bit) to text.
+
+    Accepts raw bytes in the request body. Returns JSON with transcribed text.
+    """
+    audio_bytes = await request.body()
+    if len(audio_bytes) < 100:
+        raise HTTPException(status_code=400, detail="Audio too short")
+
+    # Convert PCM16 bytes to float32 numpy array
+    audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+
+    asr: WhisperModel = app.state.asr_model
+    language = os.environ.get("ASR_LANGUAGE", None)  # None = auto-detect
+
+    segments, info = asr.transcribe(
+        audio_np,
+        language=language if language else None,
+        beam_size=1,
+        vad_filter=True,
+    )
+    text = " ".join(seg.text for seg in segments).strip()
+    return {"text": text, "language": info.language}
+
+
+@app.get("/v1/asr/health")
+async def asr_health():
+    has_asr = hasattr(app.state, "asr_model") and app.state.asr_model is not None
+    return {"status": "ok" if has_asr else "not loaded"}
+
+
 @app.get("/health")
 async def health():
-    return {"status": "ok", "model": "VibeVoice-Realtime-0.5B"}
+    has_asr = hasattr(app.state, "asr_model") and app.state.asr_model is not None
+    return {"status": "ok", "model": "VibeVoice-Realtime-0.5B", "asr": has_asr}
