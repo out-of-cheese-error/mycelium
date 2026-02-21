@@ -6,7 +6,7 @@ import json
 import uuid
 import re
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from app.agent import app_agent
+from app.agent import app_agent, run_background_extraction_and_emotions
 
 from datetime import datetime
 
@@ -326,5 +326,16 @@ async def chat_in_thread(workspace_id: str, thread_id: str, request: ChatRequest
              
         with open(path, 'w') as f:
             json.dump(thread_data, f, indent=2)
+
+        # Fire background extraction and emotion update (non-blocking)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(
+            None,
+            run_background_extraction_and_emotions,
+            workspace_id,
+            request.message,
+            clean_response
+        )
 
     return StreamingResponse(event_generator(), media_type="text/plain")

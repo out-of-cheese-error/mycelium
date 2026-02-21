@@ -13,7 +13,7 @@ import httpx
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from langchain_core.messages import HumanMessage, AIMessage
 
-from app.agent import app_agent
+from app.agent import app_agent, run_background_extraction_and_emotions
 from app.llm_config import llm_config
 from app.utils.thinking import strip_thinking, extract_thinking
 from app.routers.audio import _clean_for_tts
@@ -144,6 +144,16 @@ async def _stream_llm_and_tts(
     thread_data["messages"].append({"role": "user", "content": transcript})
     thread_data["messages"].append({"role": "assistant", "content": clean_response})
     _save_thread(thread_path, thread_data)
+
+    # Fire background extraction and emotion update (non-blocking)
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(
+        None,
+        run_background_extraction_and_emotions,
+        workspace_id,
+        transcript,
+        clean_response
+    )
 
 
 async def _stream_tts_to_ws(ws: WebSocket, text: str, cancelled: asyncio.Event):

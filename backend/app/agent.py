@@ -1586,45 +1586,64 @@ def generate_node(state: AgentState, config: RunnableConfig):
 
     return {"messages": [response]}
 
-def extract_knowledge_node(state: AgentState):
-    """Analyzes the latest interaction to extract new entities and relations."""
-    workspace_id = state.get("workspace_id", "default")
-    memory_store = GraphMemory(workspace_id=workspace_id)
+import threading
 
-    # We look at the last Human message and the last AI message
-    messages = state["messages"]
-    if len(messages) < 2:
-        return {}
-    
-    last_human = next((m for m in reversed(messages[:-1]) if isinstance(m, HumanMessage)), None)
-    last_ai = messages[-1]
-    
-    if not last_human:
-        return {}
+# Per-workspace locks to serialize background extraction + emotion tasks.
+# Prevents concurrent LLM calls (GPU contention) and lost graph updates
+# when multiple messages are sent in quick succession.
+_bg_locks = {}
+_bg_locks_lock = threading.Lock()
 
-    # Defense-in-depth: strip any residual thinking tags from content used in prompt
+
+def _get_bg_lock(workspace_id: str) -> threading.Lock:
+    with _bg_locks_lock:
+        if workspace_id not in _bg_locks:
+            _bg_locks[workspace_id] = threading.Lock()
+        return _bg_locks[workspace_id]
+
+
+def run_background_extraction_and_emotions(workspace_id: str, user_message: str, ai_response: str):
+    """
+    Runs knowledge extraction and emotion update as a background task.
+    Called outside the LangGraph flow after streaming completes.
+    Both operations run sequentially in the same background thread.
+    Serialized per-workspace so concurrent messages queue up instead of racing.
+    """
+    lock = _get_bg_lock(workspace_id)
+    with lock:
+        _run_extraction_and_emotions(workspace_id, user_message, ai_response)
+
+
+def _run_extraction_and_emotions(workspace_id: str, user_message: str, ai_response: str):
+    """Inner implementation — always called under the per-workspace lock."""
+    import traceback
     from app.utils.thinking import strip_thinking
-    ai_content_clean = strip_thinking(last_ai.content) if last_ai.content else ""
 
-    extraction_prompt = f"""Analyze the following interaction and extract meaningful entities and relationships to build a knowledge graph.
+    ai_content_clean = strip_thinking(ai_response) if ai_response else ""
 
-    User: {last_human.content}
+    # --- Knowledge Extraction ---
+    try:
+        memory_store = GraphMemory(workspace_id=workspace_id)
+
+        extraction_prompt = f"""Analyze the following interaction and extract meaningful entities and relationships to build a knowledge graph.
+
+    User: {user_message}
     AI: {ai_content_clean}
-    
+
     Return the output strictly as a JSON object with two keys: "entities" and "relations".
-    
+
     1. "entities": A list of objects {{ "name": "Exact Name", "type": "Category", "description": "Brief facts" }}
     2. "relations": A list of objects {{ "source": "Entity Name", "target": "Entity Name", "relation": "relationship label" }}
-    
+
     Rules:
     - Extract factual, long-term useful information (names, preferences, tech stacks, projects).
     - CONNECT entities with relations whenever possible.
     - Ignore greetings or trivial chit-chat.
-    
+
     Example Input:
     User: I am working on a new project called MyCelium using Python.
     AI: That sounds cool.
-    
+
     Example JSON:
     {{
       "entities": [
@@ -1637,121 +1656,91 @@ def extract_knowledge_node(state: AgentState):
         {{ "source": "MyCelium", "target": "Python", "relation": "uses" }}
       ]
     }}
-    
+
     JSON:
     """
-    
-    try:
+
         llm = get_llm()
         extraction_response = llm.invoke([HumanMessage(content=extraction_prompt)])
 
-        from app.utils.thinking import strip_thinking
         content = strip_thinking(extraction_response.content)
-        print(f"DEBUG: Extraction raw content: {content[:100]}...") # Log start of content
-        
-        # Basic cleanup to find JSON if wrapped in markdown
+        print(f"BG: Extraction raw content: {content[:100]}...")
+
         match = re.search(r"\{.*\}", content, re.DOTALL)
         if match:
-            json_str = match.group(0)
-            data = json.loads(json_str)
-            
+            data = json.loads(match.group(0))
+
             entities = data.get("entities", [])
             relations = data.get("relations", [])
-            
-            if not entities and not relations:
-                print("DEBUG: LLM found no entities/relations.")
-            
-            # Update Memory
+
             for entity in entities:
                 memory_store.add_entity(entity["name"], entity["type"], entity["description"])
-            
+
             for rel in relations:
                 memory_store.add_relation(rel["source"], rel["target"], rel["relation"])
-                
-            print(f"DEBUG: Extracted {len(entities)} entities and {len(relations)} relations for workspace {workspace_id}.")
+
+            print(f"BG: Extracted {len(entities)} entities and {len(relations)} relations for {workspace_id}.")
         else:
-            print("DEBUG: No JSON found in extraction response.")
-            
+            print("BG: No JSON found in extraction response.")
+
     except Exception as e:
-        print(f"DEBUG: Extraction failed: {e}")
-        import traceback
+        print(f"BG: Knowledge extraction failed for {workspace_id}: {e}")
         traceback.print_exc()
-        
-    return {}
 
-def update_emotions_node(state: AgentState):
-    """Analyzes the interaction to update the bot's emotional state dynamically."""
-    workspace_id = state.get("workspace_id", "default")
-    messages = state["messages"]
-    if len(messages) < 2:
-        return {}
-    
-    last_human = next((m for m in reversed(messages[:-1]) if isinstance(m, HumanMessage)), None)
-    last_ai = messages[-1]
-    
-    if not last_human:
-        return {}
+    # --- Emotion Update ---
+    try:
+        emotion_path = f"./memory_data/{workspace_id}/emotion.json"
+        current_data = {"motive": "Help the user", "scales": []}
 
-    # Load current emotions (new dynamic format)
-    emotion_path = f"./memory_data/{workspace_id}/emotion.json"
-    current_data = {"motive": "Help the user", "scales": []}
-    
-    if os.path.exists(emotion_path):
-        try:
-            with open(emotion_path, 'r') as f:
-                data = json.load(f)
-                
-                # Handle new format (scales array)
-                if "scales" in data:
-                    current_data = data
-                # Migration from old format (top-level emotion keys)
-                elif "happiness" in data:
-                    # Dynamically migrate any emotion keys that exist
-                    migrated_scales = []
-                    for key, value in data.items():
-                        if key == "motive":
-                            continue
-                        if isinstance(value, (int, float)):
-                            migrated_scales.append({
-                                "name": key.capitalize(), 
-                                "value": int(value), 
-                                "frozen": False
-                            })
-                    current_data = {
-                        "motive": data.get("motive", "Help the user"),
-                        "scales": migrated_scales
-                    }
-        except:
-            pass
+        if os.path.exists(emotion_path):
+            try:
+                with open(emotion_path, 'r') as f:
+                    data = json.load(f)
 
-    scales = current_data.get("scales", [])
-    motive = current_data.get("motive", "Help the user")
-    
-    # If no scales exist, nothing to update
-    if not scales:
-        print(f"DEBUG: No emotion scales defined for {workspace_id}, skipping update.")
-        return {}
-    
-    # Build dynamic prompt based on existing scales
-    # Only include non-frozen scales in the prompt (frozen = user doesn't want AI to change them)
-    updatable_scales = [s for s in scales if not s.get("frozen", False)]
-    
-    if not updatable_scales:
-        print(f"DEBUG: All emotion scales are frozen for {workspace_id}, skipping update.")
-        return {}
-    
-    from app.utils.thinking import strip_thinking
-    scales_str = "\n".join([f"    - {s['name']}: {s['value']} (0-100)" for s in updatable_scales])
-    delta_keys = ", ".join([f'"{s["name"].lower()}_delta": int' for s in updatable_scales])
+                    if "scales" in data:
+                        current_data = data
+                    elif "happiness" in data:
+                        migrated_scales = []
+                        for key, value in data.items():
+                            if key == "motive":
+                                continue
+                            if isinstance(value, (int, float)):
+                                migrated_scales.append({
+                                    "name": key.capitalize(),
+                                    "value": int(value),
+                                    "frozen": False
+                                })
+                        current_data = {
+                            "motive": data.get("motive", "Help the user"),
+                            "scales": migrated_scales
+                        }
+            except:
+                pass
 
-    prompt = f"""Analyze the user's message and the AI's response to update the AI's emotional state and MOTIVE.
-    
+        scales = current_data.get("scales", [])
+        motive = current_data.get("motive", "Help the user")
+
+        if not scales:
+            print(f"BG: No emotion scales defined for {workspace_id}, skipping.")
+            return
+
+        updatable_scales = [s for s in scales if not s.get("frozen", False)]
+
+        if not updatable_scales:
+            print(f"BG: All emotion scales are frozen for {workspace_id}, skipping.")
+            return
+
+        scales_str = "\n".join([f"    - {s['name']}: {s['value']} (0-100)" for s in updatable_scales])
+        delta_keys = ", ".join([f'"{s["name"].lower()}_delta": int' for s in updatable_scales])
+
+        prompt = f"""Analyze the user's message and the AI's response to update the AI's emotional state and MOTIVE.
+
 Current Emotional Scales (only these can be updated):
 {scales_str}
     - Current Motive: "{motive}"
-    
-User: {last_human.content}
-AI: {strip_thinking(last_ai.content) if last_ai.content else ""}
+
+User: {user_message}
+AI: {ai_content_clean}
 
 Tasks:
 1. Determine DELTA change for each emotion scale (+/- int). Small changes (-5 to +5) for subtle shifts, larger for significant events.
@@ -1760,54 +1749,46 @@ Tasks:
    - If user is hostile -> Motive: "Defend oneself" or "De-escalate".
    - If user is asking for code -> Motive: "Provide efficient, bug-free solution".
    - Keep it short (max 10 words).
-    
+
 Return JSON with delta for each scale (use lowercase scale name + "_delta"):
-{{ 
+{{
     {delta_keys},
     "new_motive": "string"
 }}
 JSON:"""
-    
-    try:
+
         llm = get_llm()
         response = llm.invoke([HumanMessage(content=prompt)])
 
-        from app.utils.thinking import strip_thinking
         emotion_content = strip_thinking(response.content)
         match = re.search(r"\{.*\}", emotion_content, re.DOTALL)
         if match:
             output = json.loads(match.group(0))
 
-            # Update scales dynamically
             for scale in scales:
                 if scale.get("frozen", False):
-                    continue  # Skip frozen scales
-                    
+                    continue
+
                 delta_key = f"{scale['name'].lower()}_delta"
                 delta = output.get(delta_key, 0)
-                
+
                 if delta != 0:
                     old_val = scale["value"]
                     scale["value"] = max(0, min(100, old_val + delta))
-                    print(f"DEBUG: {scale['name']}: {old_val} -> {scale['value']} (delta: {delta})")
-            
-            # Update Motive
+                    print(f"BG: {scale['name']}: {old_val} -> {scale['value']} (delta: {delta})")
+
             if "new_motive" in output and output["new_motive"]:
                 current_data["motive"] = output["new_motive"]
-            
-            # Save
+
             current_data["scales"] = scales
             with open(emotion_path, 'w') as f:
                 json.dump(current_data, f, indent=2)
-            
-            print(f"DEBUG: Updated emotions for {workspace_id}")
-            
+
+            print(f"BG: Updated emotions for {workspace_id}")
+
     except Exception as e:
-        print(f"DEBUG: Emotion update failed: {e}")
-        import traceback
+        print(f"BG: Emotion update failed for {workspace_id}: {e}")
         traceback.print_exc()
-        
-    return {}
 
 # --- Graph Definition ---
 workflow = StateGraph(AgentState)
@@ -1866,8 +1847,6 @@ async def dynamic_tool_node(state: AgentState, config: RunnableConfig):
     return await tool_executor.ainvoke(state, config)
 
 workflow.add_node("tools", dynamic_tool_node)
-workflow.add_node("extract", extract_knowledge_node)
-workflow.add_node("update_emotions", update_emotions_node)
 
 workflow.set_entry_point("retrieve")
 workflow.add_edge("retrieve", "generate")
@@ -1876,19 +1855,17 @@ def route_generate(state: AgentState):
     last_message = state["messages"][-1]
     if last_message.tool_calls:
         return "tools"
-    return "extract"
+    return END
 
 workflow.add_conditional_edges(
     "generate",
     route_generate,
     {
         "tools": "tools",
-        "extract": "extract"
+        END: END
     }
 )
 
 workflow.add_edge("tools", "generate")
-workflow.add_edge("extract", "update_emotions")
-workflow.add_edge("update_emotions", END)
 
 app_agent = workflow.compile()

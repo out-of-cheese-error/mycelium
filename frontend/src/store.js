@@ -590,7 +590,11 @@ export const useStore = create((set, get) => ({
                 get().selectNote(activeNote.id);
             }
 
-            setTimeout(() => get().fetchGraph(), 2000);
+            // Re-fetch after background extraction and emotion update likely complete
+            setTimeout(() => {
+                get().fetchGraph();
+                get().fetchEmotions();
+            }, 5000);
 
         } catch (e) {
             if (e.name === 'AbortError') {

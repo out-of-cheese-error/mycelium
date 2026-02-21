@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
-from app.agent import app_agent
+from app.agent import app_agent, run_background_extraction_and_emotions
 from app.memory_store import GraphMemory
 from app.routers import workspaces, threads, system, audio, concepts, hot_topics, connectors, graph_chat, skills, call
 import uvicorn
@@ -89,6 +89,15 @@ async def chat_endpoint(request: ChatRequest):
         # Get last AI message
         ai_message = final_state["messages"][-1]
         
+        # Fire background extraction and emotion update
+        import threading
+        t = threading.Thread(
+            target=run_background_extraction_and_emotions,
+            args=(request.workspace_id, request.message, ai_message.content),
+            daemon=True
+        )
+        t.start()
+
         return ChatResponse(response=ai_message.content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
