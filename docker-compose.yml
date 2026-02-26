@@ -3,6 +3,10 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
+    # Allow the backend container to reach LLM services on the host machine
+    # Use http://host.docker.internal:1234/v1 as the LLM base URL in settings
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # Persist Memory (Graph + Chroma + Notes) - configurable via .env
       - ${MEMORY_DATA_PATH:-./backend/memory_data}:/app/memory_data

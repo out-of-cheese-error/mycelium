@@ -987,8 +987,7 @@ const AppSettingsModal = ({ onClose }) => {
                                             setTtsTestStatus('loading');
                                             setTtsTestDetail('');
                                             try {
-                                                const API_base = localStorage.getItem('mycelium_api_url') || import.meta.env.VITE_API_BASE || 'http://localhost:8000';
-                                                const res = await fetch(`${API_base}/audio/test`);
+                                                const res = await fetch(`${API_BASE}/audio/test`);
                                                 if (!res.ok) {
                                                     setTtsTestStatus('error');
                                                     setTtsTestDetail(`Backend returned ${res.status}`);
