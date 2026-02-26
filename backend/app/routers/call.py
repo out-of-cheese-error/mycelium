@@ -146,14 +146,13 @@ async def _stream_llm_and_tts(
     _save_thread(thread_path, thread_data)
 
     # Fire background extraction and emotion update (non-blocking)
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(
-        None,
-        run_background_extraction_and_emotions,
-        workspace_id,
-        transcript,
-        clean_response
+    import threading
+    t = threading.Thread(
+        target=run_background_extraction_and_emotions,
+        args=(workspace_id, transcript, clean_response),
+        daemon=True
     )
+    t.start()
 
 
 async def _stream_tts_to_ws(ws: WebSocket, text: str, cancelled: asyncio.Event):

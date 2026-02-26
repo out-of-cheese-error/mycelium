@@ -305,7 +305,7 @@ async def chat_in_thread(workspace_id: str, thread_id: str, request: ChatRequest
                 # Import here to avoid top-level circular issues or just standard practice
                 from app.llm_config import llm_config
                 
-                llm = llm_config.get_chat_llm()
+                llm = llm_config.get_ingestion_llm()
                 
                 title_prompt = f"""Generate a short, concise title (max 5 words) for this conversation based on the first interaction.
                 
@@ -328,14 +328,12 @@ async def chat_in_thread(workspace_id: str, thread_id: str, request: ChatRequest
             json.dump(thread_data, f, indent=2)
 
         # Fire background extraction and emotion update (non-blocking)
-        import asyncio
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(
-            None,
-            run_background_extraction_and_emotions,
-            workspace_id,
-            request.message,
-            clean_response
+        import threading
+        t = threading.Thread(
+            target=run_background_extraction_and_emotions,
+            args=(workspace_id, request.message, clean_response),
+            daemon=True
         )
+        t.start()
 
     return StreamingResponse(event_generator(), media_type="text/plain")

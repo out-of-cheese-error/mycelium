@@ -1487,9 +1487,28 @@ def generate_node(state: AgentState, config: RunnableConfig):
     # We take the LAST 'limit' messages, but ensure tool call/result pairs stay together.
     # This prevents the Anthropic API error about mismatched tool_use_id.
     history_messages = truncate_messages_safe(messages, limit)
-        
+
+    # Safeguard: LM Studio models fail with "No user query found" if the first
+    # non-system message is not a HumanMessage (e.g. truncation leaves a leading AIMessage).
+    # Find the first HumanMessage and start from there. If none exists (tool-call loop),
+    # recover the last HumanMessage from the full history.
+    first_human_idx = next((i for i, m in enumerate(history_messages) if isinstance(m, HumanMessage)), None)
+    if first_human_idx is not None and first_human_idx > 0:
+        history_messages = history_messages[first_human_idx:]
+    elif first_human_idx is None:
+        # No HumanMessage at all after truncation — recover from full history
+        last_human = next((m for m in reversed(messages) if isinstance(m, HumanMessage)), None)
+        if last_human:
+            history_messages = [last_human] + history_messages
+        else:
+            history_messages = [HumanMessage(content="Continue with the current task.")] + history_messages
+
     prompt_messages = [SystemMessage(content=system_prompt)] + history_messages
-    
+
+    # Debug: log message roles being sent to LLM
+    role_summary = [type(m).__name__ for m in prompt_messages]
+    print(f"DEBUG [generate_node]: Sending {len(prompt_messages)} messages to LLM: {role_summary}")
+
     llm = get_llm()
     
     # Get MCP tools from connected servers
@@ -1660,7 +1679,7 @@ def _run_extraction_and_emotions(workspace_id: str, user_message: str, ai_respon
     JSON:
     """
 
-        llm = get_llm()
+        llm = llm_config.get_ingestion_llm()
         extraction_response = llm.invoke([HumanMessage(content=extraction_prompt)])
 
         content = strip_thinking(extraction_response.content)
@@ -1757,7 +1776,7 @@ Return JSON with delta for each scale (use lowercase scale name + "_delta"):
 }}
 JSON:"""
 
-        llm = get_llm()
+        llm = llm_config.get_ingestion_llm()
         response = llm.invoke([HumanMessage(content=prompt)])
 
         emotion_content = strip_thinking(response.content)
