@@ -6,7 +6,10 @@ from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from app.agent import app_agent, run_background_extraction_and_emotions
 from app.memory_store import GraphMemory
 from app.routers import workspaces, threads, system, audio, concepts, hot_topics, connectors, graph_chat, skills, call
+import os
 import uvicorn
+
+from app.memory_store import MEMORY_BASE_DIR
 
 app = FastAPI(title="MyCelium")
 
@@ -34,7 +37,15 @@ app.include_router(call.router)
 # --- MCP Server Lifecycle ---
 @app.on_event("startup")
 async def startup_event():
-    """Connect to configured MCP servers on application startup."""
+    """Connect to configured MCP servers and restore extraction buffers on startup."""
+    # Restore any persisted extraction buffers from previous session
+    try:
+        from app.services.extraction_buffer import restore_buffers_from_disk
+        restore_buffers_from_disk()
+    except Exception as e:
+        print(f"Buffer restore: {e}")
+
+    # Connect to MCP servers
     try:
         from app.services.mcp_service import refresh_mcp_servers
         results = await refresh_mcp_servers()
@@ -49,7 +60,16 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Disconnect all MCP servers on application shutdown."""
+    """Save extraction buffers and disconnect MCP servers on shutdown."""
+    # Save any pending extraction buffers to disk
+    try:
+        from app.services.extraction_buffer import save_all_buffers
+        save_all_buffers()
+        print("Buffer: All buffers saved to disk")
+    except Exception as e:
+        print(f"Buffer save: {e}")
+
+    # Disconnect MCP servers
     try:
         from app.services.mcp_service import mcp_service
         await mcp_service.disconnect_all()

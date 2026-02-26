@@ -745,6 +745,7 @@ from app.services.script_service import generate_script_logic, get_scripts_dir
 from app.services.contemplation_service import contemplate_logic, stop_contemplation
 from app.services.redundancy_service import collapse_redundancy, stop_redundancy
 from app.services.singleton_service import assign_singletons, stop_singleton_assignment, execute_selected_proposals
+from app.services.consolidation_service import start_consolidation_background, stop_consolidation, get_consolidation_progress, consolidation_jobs
 
 @router.post("/{workspace_id}/contemplate")
 async def contemplate_workspace(workspace_id: str, n: int = 3, topic: str = None, save_to_notes: bool = False, depth: int = 1, job_id: str = None):
@@ -802,6 +803,84 @@ async def collapse_redundancy_endpoint(
 async def stop_collapse_redundancy(workspace_id: str, job_id: str):
     stopped = stop_redundancy(job_id)
     return {"status": "stopped" if stopped else "not_found"}
+
+
+@router.post("/{workspace_id}/consolidate")
+async def consolidate_endpoint(
+    workspace_id: str,
+    similarity_threshold: float = 0.85,
+    max_workers: int = 4,
+    job_id: str = None
+):
+    """
+    Trigger sleep-time graph consolidation (LightMem-inspired).
+    Runs in background — poll /consolidate/progress for status.
+    """
+    path = os.path.join(MEMORY_BASE_DIR, workspace_id)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    if not job_id:
+        job_id = f"consolidate-{workspace_id}"
+
+    # If already running, don't start another
+    existing = consolidation_jobs.get(job_id)
+    if existing and existing.get("status") == "running":
+        return {"status": "already_running", "job_id": job_id}
+
+    start_consolidation_background(workspace_id, similarity_threshold, max_workers, job_id)
+    return {"status": "started", "job_id": job_id}
+
+
+@router.get("/{workspace_id}/consolidate/progress")
+async def consolidate_progress(workspace_id: str, job_id: str):
+    """Poll consolidation progress."""
+    progress = get_consolidation_progress(job_id)
+    if not progress:
+        return {"status": "not_found"}
+    return progress
+
+
+@router.post("/{workspace_id}/consolidate/stop")
+async def stop_consolidate(workspace_id: str, job_id: str):
+    stopped = stop_consolidation(job_id)
+    return {"status": "stopped" if stopped else "not_found"}
+
+
+@router.post("/{workspace_id}/flush_buffer")
+async def flush_buffer_endpoint(workspace_id: str):
+    """Force-flush the extraction buffer and run extraction immediately."""
+    path = os.path.join(MEMORY_BASE_DIR, workspace_id)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    from app.services.extraction_buffer import get_buffer
+    buffer = get_buffer(workspace_id)
+
+    if buffer.is_empty():
+        return {"status": "empty", "turns_flushed": 0, "message": "Buffer is empty."}
+
+    turns = buffer.flush()
+
+    # Clear persisted buffer file
+    buf_file = os.path.join(path, "extraction_buffer.json")
+    if os.path.exists(buf_file):
+        try:
+            os.remove(buf_file)
+        except Exception:
+            pass
+
+    # Run extraction on flushed turns
+    import threading
+    from app.services.batch_extraction_service import force_extract_turns
+    t = threading.Thread(
+        target=force_extract_turns,
+        args=(workspace_id, turns),
+        daemon=True
+    )
+    t.start()
+
+    return {"status": "flushed", "turns_flushed": len(turns), "message": f"Flushed {len(turns)} turns for extraction."}
 
 
 class MergeGroupRequest(BaseModel):

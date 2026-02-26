@@ -1641,10 +1641,27 @@ def _run_extraction_and_emotions(workspace_id: str, user_message: str, ai_respon
     ai_content_clean = strip_thinking(ai_response) if ai_response else ""
 
     # --- Knowledge Extraction ---
-    try:
-        memory_store = GraphMemory(workspace_id=workspace_id)
+    extraction_mode = llm_config.get_config().memory_extraction_mode
 
-        extraction_prompt = f"""Analyze the following interaction and extract meaningful entities and relationships to build a knowledge graph.
+    if extraction_mode == "buffered":
+        # LightMem-inspired buffered extraction: pre-filter → buffer → batch extract
+        try:
+            from app.services.batch_extraction_service import run_buffered_extraction
+            run_buffered_extraction(workspace_id, user_message, ai_content_clean)
+        except Exception as e:
+            print(f"BG: Buffered extraction failed for {workspace_id}: {e}")
+            traceback.print_exc()
+    else:
+        # Original immediate extraction (with pre-filter)
+        from app.services.message_filter import should_extract
+
+        if not should_extract(user_message, ai_content_clean):
+            print(f"BG: Skipping extraction for {workspace_id} (trivial message)")
+        else:
+            try:
+                memory_store = GraphMemory(workspace_id=workspace_id)
+
+                extraction_prompt = f"""Analyze the following interaction and extract meaningful entities and relationships to build a knowledge graph.
 
     User: {user_message}
     AI: {ai_content_clean}
@@ -1679,32 +1696,32 @@ def _run_extraction_and_emotions(workspace_id: str, user_message: str, ai_respon
     JSON:
     """
 
-        llm = llm_config.get_ingestion_llm()
-        extraction_response = llm.invoke([HumanMessage(content=extraction_prompt)])
+                llm = llm_config.get_ingestion_llm()
+                extraction_response = llm.invoke([HumanMessage(content=extraction_prompt)])
 
-        content = strip_thinking(extraction_response.content)
-        print(f"BG: Extraction raw content: {content[:100]}...")
+                content = strip_thinking(extraction_response.content)
+                print(f"BG: Extraction raw content: {content[:100]}...")
 
-        match = re.search(r"\{.*\}", content, re.DOTALL)
-        if match:
-            data = json.loads(match.group(0))
+                match = re.search(r"\{.*\}", content, re.DOTALL)
+                if match:
+                    data = json.loads(match.group(0))
 
-            entities = data.get("entities", [])
-            relations = data.get("relations", [])
+                    entities = data.get("entities", [])
+                    relations = data.get("relations", [])
 
-            for entity in entities:
-                memory_store.add_entity(entity["name"], entity["type"], entity["description"])
+                    for entity in entities:
+                        memory_store.add_entity(entity["name"], entity["type"], entity["description"])
 
-            for rel in relations:
-                memory_store.add_relation(rel["source"], rel["target"], rel["relation"])
+                    for rel in relations:
+                        memory_store.add_relation(rel["source"], rel["target"], rel["relation"])
 
-            print(f"BG: Extracted {len(entities)} entities and {len(relations)} relations for {workspace_id}.")
-        else:
-            print("BG: No JSON found in extraction response.")
+                    print(f"BG: Extracted {len(entities)} entities and {len(relations)} relations for {workspace_id}.")
+                else:
+                    print("BG: No JSON found in extraction response.")
 
-    except Exception as e:
-        print(f"BG: Knowledge extraction failed for {workspace_id}: {e}")
-        traceback.print_exc()
+            except Exception as e:
+                print(f"BG: Knowledge extraction failed for {workspace_id}: {e}")
+                traceback.print_exc()
 
     # --- Emotion Update ---
     try:

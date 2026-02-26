@@ -1271,6 +1271,126 @@ export const useStore = create((set, get) => ({
         }
     },
 
+    // --- Consolidation (embedding-similarity based) ---
+    consolidationLoading: false,
+    consolidationResult: null,
+    consolidationProgress: null, // { phase, progress, current, total }
+    _consolidationPollTimer: null,
+
+    runConsolidation: async (similarityThreshold = 0.85, maxWorkers = 4) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return null;
+
+        const jobId = `consolidate-${ws.id}`;
+        const appendLog = (logObj) => {
+            set(state => ({
+                growLogs: {
+                    ...state.growLogs,
+                    [ws.id]: [...(state.growLogs[ws.id] || []), logObj]
+                }
+            }));
+        };
+
+        set({ consolidationLoading: true, consolidationResult: null, consolidationProgress: null });
+        appendLog({ type: 'info', text: `Running graph consolidation (threshold=${similarityThreshold}, workers=${maxWorkers})...` });
+
+        try {
+            const params = new URLSearchParams({
+                similarity_threshold: similarityThreshold,
+                max_workers: maxWorkers,
+                job_id: jobId
+            });
+
+            await axios.post(`${API_base}/workspaces/${ws.id}/consolidate?${params.toString()}`);
+
+            // Start polling for progress
+            let lastLogCount = 0;
+            const poll = async () => {
+                try {
+                    const res = await axios.get(`${API_base}/workspaces/${ws.id}/consolidate/progress?job_id=${jobId}`);
+                    const data = res.data;
+
+                    if (data.status === 'not_found') {
+                        // Job already cleaned up
+                        set({ consolidationLoading: false, consolidationProgress: null });
+                        return;
+                    }
+
+                    set({ consolidationProgress: { phase: data.phase, progress: data.progress, current: data.current, total: data.total } });
+
+                    // Append new logs
+                    if (data.logs && data.logs.length > lastLogCount) {
+                        const newLogs = data.logs.slice(lastLogCount);
+                        newLogs.forEach(log => appendLog(log));
+                        lastLogCount = data.logs.length;
+                    }
+
+                    // Check if done
+                    if (data.progress >= 100 || data.status !== 'running') {
+                        if (get()._consolidationPollTimer) {
+                            clearInterval(get()._consolidationPollTimer);
+                            set({ _consolidationPollTimer: null });
+                        }
+                        if (data.result) {
+                            set({ consolidationResult: data.result });
+                        }
+                        set({ consolidationLoading: false, consolidationProgress: null });
+                        get().fetchGraph();
+                        return;
+                    }
+                } catch (e) {
+                    console.error("Poll consolidation progress failed", e);
+                }
+            };
+
+            // Poll immediately, then every 1.5s
+            await poll();
+            if (get().consolidationLoading) {
+                const timer = setInterval(poll, 1500);
+                set({ _consolidationPollTimer: timer });
+            }
+
+        } catch (e) {
+            console.error("Consolidation failed", e);
+            const errMsg = e.response?.data?.detail || e.message || "Unknown error";
+            appendLog({ type: 'error', text: `Error: ${errMsg}` });
+            set({ consolidationLoading: false });
+            return null;
+        }
+    },
+
+    stopConsolidation: async () => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+
+        const jobId = `consolidate-${ws.id}`;
+        try {
+            await axios.post(`${API_base}/workspaces/${ws.id}/consolidate/stop?job_id=${jobId}`);
+        } catch (e) {
+            console.error("Stop consolidation failed", e);
+        }
+        // Stop polling
+        if (get()._consolidationPollTimer) {
+            clearInterval(get()._consolidationPollTimer);
+            set({ _consolidationPollTimer: null });
+        }
+    },
+
+    clearConsolidationResult: () => set({ consolidationResult: null, consolidationProgress: null }),
+
+    // Flush extraction buffer
+    flushBuffer: async () => {
+        const ws = get().currentWorkspace;
+        if (!ws) return null;
+        try {
+            const res = await axios.post(`${API_base}/workspaces/${ws.id}/flush_buffer`);
+            return res.data;
+        } catch (e) {
+            console.error("Flush buffer failed", e);
+            return null;
+        }
+    },
+
     growLogs: {}, // { [workspaceId]: [] }
 
 

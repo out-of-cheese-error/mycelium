@@ -1,11 +1,11 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Volume2, Loader, Square, ChevronRight } from 'lucide-react';
+import { Send, Volume2, Loader, Square, ChevronRight, Zap } from 'lucide-react';
 import { useStore } from '../store';
 
 const ChatArea = () => {
-    const { messages, isLoading, sendMessage, currentWorkspace, currentThread, getAudioStreamUrl, chatInput, setChatInput, graphData, notesList, fetchNotesList, interruptGeneration } = useStore();
+    const { messages, isLoading, sendMessage, currentWorkspace, currentThread, getAudioStreamUrl, chatInput, setChatInput, graphData, notesList, fetchNotesList, interruptGeneration, flushBuffer } = useStore();
     // Removed local input state to persist drafts in store
     const scrollRef = useRef(null);
 
@@ -211,6 +211,16 @@ const ChatArea = () => {
                     rows={1}
                     autoFocus
                 />
+                <button
+                    onClick={async () => {
+                        const res = await flushBuffer();
+                        if (res) alert(res.message);
+                    }}
+                    className="bg-yellow-600 hover:bg-yellow-500 text-white p-3 rounded-xl transition-colors shadow-lg"
+                    title="Flush extraction buffer"
+                >
+                    <Zap size={20} />
+                </button>
                 {isLoading ? (
                     <button
                         onClick={interruptGeneration}

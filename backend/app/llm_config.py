@@ -80,6 +80,13 @@ class LLMConfigModel(BaseModel):
         "call": False
     }
 
+    # Memory Extraction Settings (LightMem-inspired)
+    memory_extraction_mode: Literal["immediate", "buffered"] = "immediate"  # "buffered" enables batched extraction
+    buffer_turn_threshold: int = 5           # Max turns before forced extraction
+    buffer_token_threshold: int = 2000       # Estimated token threshold for extraction trigger
+    buffer_time_threshold_seconds: int = 600  # Max seconds before forced extraction (10 min)
+    topic_similarity_threshold: float = 0.3  # Cosine sim threshold for topic segmentation
+
     # MCP (Model Context Protocol) Servers
     mcp_servers: List[MCPServerConfig] = [
         MCPServerConfig(
