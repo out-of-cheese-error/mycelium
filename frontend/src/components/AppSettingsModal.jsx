@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Palette, Server, Volume2, Settings2, RefreshCw, Check, Plug, Plus, Trash2, Play, AlertCircle, Link, Layers } from 'lucide-react';
+import { X, Save, Palette, Server, Volume2, Settings2, RefreshCw, Check, Plug, Plus, Trash2, Play, AlertCircle, Link, Layers, Brain } from 'lucide-react';
 import { useStore } from '../store';
 import { THEMES, applyThemeToDOM } from './ThemeProvider';
 import { TAB_REGISTRY, DEFAULT_ENABLED_TABS } from '../tabRegistry';
@@ -97,6 +97,12 @@ const AppSettingsModal = ({ onClose }) => {
         colorful_markdown: false,
         // Tab Visibility
         enabled_tabs: DEFAULT_ENABLED_TABS,
+        // Memory Extraction
+        memory_extraction_mode: 'immediate',
+        buffer_turn_threshold: 5,
+        buffer_token_threshold: 2000,
+        buffer_time_threshold_seconds: 600,
+        topic_similarity_threshold: 0.3,
         // MCP Servers
         mcp_servers: [],
     });
@@ -143,6 +149,12 @@ const AppSettingsModal = ({ onClose }) => {
                     font_size: data.font_size || 'md',
                     colorful_markdown: data.colorful_markdown || false,
                     enabled_tabs: data.enabled_tabs || DEFAULT_ENABLED_TABS,
+                    // Memory Extraction
+                    memory_extraction_mode: data.memory_extraction_mode || 'immediate',
+                    buffer_turn_threshold: data.buffer_turn_threshold !== undefined ? data.buffer_turn_threshold : 5,
+                    buffer_token_threshold: data.buffer_token_threshold !== undefined ? data.buffer_token_threshold : 2000,
+                    buffer_time_threshold_seconds: data.buffer_time_threshold_seconds !== undefined ? data.buffer_time_threshold_seconds : 600,
+                    topic_similarity_threshold: data.topic_similarity_threshold !== undefined ? data.topic_similarity_threshold : 0.3,
                     mcp_servers: data.mcp_servers || [],
                 });
             }
@@ -257,6 +269,10 @@ const AppSettingsModal = ({ onClose }) => {
             await updateSystemConfig({
                 ...config,
                 temperature: parseFloat(config.temperature),
+                buffer_turn_threshold: parseInt(config.buffer_turn_threshold),
+                buffer_token_threshold: parseInt(config.buffer_token_threshold),
+                buffer_time_threshold_seconds: parseInt(config.buffer_time_threshold_seconds),
+                topic_similarity_threshold: parseFloat(config.topic_similarity_threshold),
             });
             // Update UI settings in store for persistence
             setUiSettings({
@@ -899,6 +915,90 @@ const AppSettingsModal = ({ onClose }) => {
                                             style={{ backgroundColor: 'var(--text-primary)' }} />
                                     </div>
                                 </label>
+                            </div>
+                            {/* Memory Extraction */}
+                            <div className="space-y-4 p-4 rounded-lg border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                                <h4 className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--accent)' }}>
+                                    <Brain size={14} />
+                                    Memory Extraction
+                                </h4>
+                                <div>
+                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Extraction Mode</label>
+                                    <select
+                                        className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                        style={{
+                                            backgroundColor: 'var(--bg-tertiary)',
+                                            borderColor: 'var(--border-color)',
+                                            color: 'var(--text-primary)',
+                                            '--tw-ring-color': 'var(--accent)',
+                                        }}
+                                        value={config.memory_extraction_mode}
+                                        onChange={e => setConfig({ ...config, memory_extraction_mode: e.target.value })}
+                                    >
+                                        <option value="immediate">Immediate (per-turn)</option>
+                                        <option value="buffered">Buffered (LightMem)</option>
+                                    </select>
+                                    <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                                        Buffered mode batches turns by topic before extraction, reducing API calls.
+                                    </p>
+                                </div>
+
+                                <div className={`space-y-3 transition-opacity ${config.memory_extraction_mode !== 'buffered' ? 'opacity-40 pointer-events-none' : ''}`}>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Turn Threshold</label>
+                                            <input
+                                                type="number"
+                                                min="2" max="20" step="1"
+                                                className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                value={config.buffer_turn_threshold}
+                                                onChange={e => setConfig({ ...config, buffer_turn_threshold: e.target.value })}
+                                            />
+                                            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Turns before flush</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Token Threshold</label>
+                                            <input
+                                                type="number"
+                                                min="500" max="10000" step="100"
+                                                className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                value={config.buffer_token_threshold}
+                                                onChange={e => setConfig({ ...config, buffer_token_threshold: e.target.value })}
+                                            />
+                                            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Est. tokens before flush</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Time Threshold (sec)</label>
+                                            <input
+                                                type="number"
+                                                min="60" max="3600" step="60"
+                                                className="w-full p-2 rounded border text-sm focus:outline-none focus:ring-2"
+                                                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent)' }}
+                                                value={config.buffer_time_threshold_seconds}
+                                                onChange={e => setConfig({ ...config, buffer_time_threshold_seconds: e.target.value })}
+                                            />
+                                            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Max idle time before flush</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
+                                                Topic Similarity ({config.topic_similarity_threshold})
+                                            </label>
+                                            <input
+                                                type="range"
+                                                min="0.1" max="0.8" step="0.05"
+                                                className="w-full h-2 rounded-lg appearance-none cursor-pointer mt-2"
+                                                style={{ backgroundColor: 'var(--bg-tertiary)', accentColor: 'var(--accent)' }}
+                                                value={config.topic_similarity_threshold}
+                                                onChange={e => setConfig({ ...config, topic_similarity_threshold: parseFloat(e.target.value) })}
+                                            />
+                                            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Lower = more segments</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}

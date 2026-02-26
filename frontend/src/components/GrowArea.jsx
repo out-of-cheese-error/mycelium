@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Settings, Terminal, Search, Zap, AlertCircle, GitMerge, ChevronRight, Link, ArrowRight } from 'lucide-react';
+import { Play, Settings, Terminal, Search, Zap, AlertCircle, GitMerge, ChevronRight, Link, ArrowRight, Brain } from 'lucide-react';
 import { useStore } from '../store';
 
 const GrowArea = () => {
@@ -12,7 +12,10 @@ const GrowArea = () => {
         // Assign Singletons
         assignSingletonsLoading, assignSingletonsProposals, selectedProposalIds,
         previewAssignSingletons, executeAssignSingletons,
-        toggleProposalSelection, selectAllProposals, deselectAllProposals, clearAssignSingletonsPreview
+        toggleProposalSelection, selectAllProposals, deselectAllProposals, clearAssignSingletonsPreview,
+        // Consolidation
+        consolidationLoading, consolidationResult, consolidationProgress,
+        runConsolidation, stopConsolidation, clearConsolidationResult
     } = useStore();
 
     const logs = (currentWorkspace && growLogs[currentWorkspace.id]) ? growLogs[currentWorkspace.id] : [];
@@ -34,6 +37,10 @@ const GrowArea = () => {
     // Assign Singletons config
     const [singletonsN, setSingletonsN] = useState(10);
     const [expandedProposals, setExpandedProposals] = useState({}); // Track which proposal reasons are expanded
+
+    // Consolidation config
+    const [consolidationThreshold, setConsolidationThreshold] = useState(0.85);
+    const [consolidationWorkers, setConsolidationWorkers] = useState(4);
 
     const logsContainerRef = useRef(null);
 
@@ -455,6 +462,98 @@ const GrowArea = () => {
                                         Execute Selected ({selectedProposalIds.length})
                                     </button>
                                 )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Consolidate Graph Section */}
+                    <div className="mt-6 pt-6 border-t border-gray-700">
+                        <h3 className="text-md font-semibold mb-3 flex items-center gap-2 text-rose-400">
+                            <Brain size={16} /> Consolidate Graph
+                        </h3>
+                        <p className="text-xs text-gray-500 mb-3">
+                            Find semantically similar nodes via embeddings and merge, update, or remove redundant ones.
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                                <label className="block text-xs text-gray-500 mb-1">Similarity Threshold</label>
+                                <input
+                                    type="number"
+                                    min="0.5" max="0.99" step="0.05"
+                                    value={consolidationThreshold}
+                                    onChange={(e) => setConsolidationThreshold(parseFloat(e.target.value) || 0.85)}
+                                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm focus:border-rose-500 focus:outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-500 mb-1">Max Workers</label>
+                                <input
+                                    type="number"
+                                    min="1" max="8"
+                                    value={consolidationWorkers}
+                                    onChange={(e) => setConsolidationWorkers(parseInt(e.target.value) || 4)}
+                                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm focus:border-rose-500 focus:outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        {!consolidationLoading ? (
+                            <button
+                                onClick={() => runConsolidation(consolidationThreshold, consolidationWorkers)}
+                                disabled={isLoading}
+                                className="w-full py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-all bg-rose-900/30 hover:bg-rose-900/50 text-rose-300 border border-rose-800/50 disabled:opacity-50"
+                            >
+                                <Brain size={14} />
+                                Run
+                            </button>
+                        ) : (
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2 text-xs text-gray-400">
+                                    <div className="w-3 h-3 border-2 border-rose-300/30 border-t-rose-300 rounded-full animate-spin" />
+                                    <span className="capitalize">
+                                        {consolidationProgress?.phase === 'similarity' ? 'Finding similar nodes' :
+                                         consolidationProgress?.phase === 'llm' ? 'LLM decisions' :
+                                         consolidationProgress?.phase === 'applying' ? 'Applying changes' :
+                                         consolidationProgress?.phase === 'fetching' ? 'Fetching embeddings' :
+                                         'Starting...'}
+                                    </span>
+                                    {consolidationProgress?.total > 0 && (
+                                        <span className="text-gray-500">
+                                            {consolidationProgress.current}/{consolidationProgress.total}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="relative w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+                                    <div
+                                        className="absolute inset-y-0 left-0 bg-rose-500 rounded-full transition-all duration-500"
+                                        style={{ width: `${consolidationProgress?.progress || 0}%` }}
+                                    />
+                                </div>
+                                <button
+                                    onClick={stopConsolidation}
+                                    className="w-full py-1.5 px-3 rounded-lg text-xs font-medium bg-red-900/30 hover:bg-red-900/50 text-red-300 border border-red-800/50 transition-colors"
+                                >
+                                    Stop
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Results */}
+                        {consolidationResult && (
+                            <div className="mt-3 bg-gray-900/50 border border-gray-700/50 rounded-lg p-3">
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div className="text-gray-400">Nodes Analyzed: <span className="text-gray-200">{consolidationResult.nodes_analyzed || 0}</span></div>
+                                    <div className="text-gray-400">Merges: <span className="text-cyan-300">{consolidationResult.merges || 0}</span></div>
+                                    <div className="text-gray-400">Updates: <span className="text-green-300">{consolidationResult.updates || 0}</span></div>
+                                    <div className="text-gray-400">Deletes: <span className="text-red-300">{consolidationResult.deletes || 0}</span></div>
+                                </div>
+                                <button
+                                    onClick={clearConsolidationResult}
+                                    className="mt-2 text-xs text-gray-600 hover:text-gray-400"
+                                >
+                                    Clear
+                                </button>
                             </div>
                         )}
                     </div>
