@@ -561,10 +561,13 @@ const NotesArea = () => {
                                                             return <li className="text-gray-300" {...props}>{children}</li>;
                                                         },
                                                         blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-blue-500 pl-4 italic text-gray-400 my-4" {...props} />,
-                                                        code: ({ node, inline, ...props }) =>
-                                                            inline
-                                                                ? <code className="bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded text-sm font-mono" {...props} />
-                                                                : <code className="block bg-gray-800 p-4 rounded-lg text-sm font-mono my-4 overflow-x-auto" {...props} />,
+                                                        pre: ({ node, children, ...props }) => (
+                                                            <pre className="bg-gray-800 p-4 rounded-lg text-sm font-mono my-4 overflow-x-auto" {...props}>{children}</pre>
+                                                        ),
+                                                        code: ({ node, className, children, ...props }) =>
+                                                            className
+                                                                ? <code className={className} {...props}>{children}</code>
+                                                                : <code className="bg-gray-800 text-blue-300 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>{children}</code>,
                                                         a: ({ node, ...props }) => <a className="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
                                                         img: ({ node, ...props }) => <img className="rounded-xl max-w-full my-4 shadow-lg border border-gray-700 mx-auto" {...props} />,
                                                         hr: ({ node, ...props }) => <hr className="border-gray-700 my-6" {...props} />,

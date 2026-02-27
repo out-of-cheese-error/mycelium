@@ -165,17 +165,17 @@ const TerminalChat = () => {
                                                 p: ({ node, ...props }) => (
                                                     <p className="mb-1.5 last:mb-0" {...props} />
                                                 ),
-                                                code: ({ node, inline, ...props }) =>
-                                                    inline ? (
-                                                        <code
-                                                            className="bg-black/30 px-1 py-0.5 rounded text-xs font-mono"
-                                                            {...props}
-                                                        />
-                                                    ) : (
+                                                code: ({ node, className, children, ...props }) =>
+                                                    className ? (
                                                         <code
                                                             className="text-xs font-mono"
                                                             {...props}
-                                                        />
+                                                        >{children}</code>
+                                                    ) : (
+                                                        <code
+                                                            className="bg-black/30 px-1 py-0.5 rounded text-xs font-mono"
+                                                            {...props}
+                                                        >{children}</code>
                                                     ),
                                                 pre: ({ node, ...props }) => (
                                                     <pre

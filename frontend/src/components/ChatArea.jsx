@@ -302,9 +302,9 @@ const ChatMessage = React.memo(({ role, content, thinking, isThinking, index, is
                     ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" style={{ color: 'var(--md-list-marker)' }} {...props} />,
                     ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" style={{ color: 'var(--md-list-marker)' }} {...props} />,
                     li: ({ node, ...props }) => <li className="select-text" style={{ color: 'var(--text-secondary)' }} {...props} />,
-                    code: ({ node, inline, ...props }) => inline
-                        ? <code className="px-1 py-0.5 rounded text-xs font-mono select-text" style={{ backgroundColor: 'var(--md-code-bg)', color: 'var(--md-code-text)' }} {...props} />
-                        : <code className="text-xs font-mono bg-transparent select-text" {...props} />,
+                    code: ({ node, className, children, ...props }) => className
+                        ? <code className="text-xs font-mono bg-transparent select-text" {...props}>{children}</code>
+                        : <code className="px-1 py-0.5 rounded text-xs font-mono select-text" style={{ backgroundColor: 'var(--md-code-bg)', color: 'var(--md-code-text)' }} {...props}>{children}</code>,
                     pre: ({ node, ...props }) => <pre className="p-2 rounded-lg my-2 overflow-x-auto select-text" style={{ backgroundColor: 'var(--md-code-bg)' }} {...props} />,
                     blockquote: ({ node, ...props }) => <blockquote className="border-l-2 pl-3 my-2 italic" style={{ borderColor: 'var(--md-blockquote)', color: 'var(--md-blockquote)' }} {...props} />,
                     img: ({ node, ...props }) => <img className="rounded-lg max-w-full max-h-80 object-contain my-2 bg-black/50" {...props} />,
