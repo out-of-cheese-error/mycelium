@@ -608,19 +608,19 @@ class GraphMemory:
     def reindex_graph(self):
         """
         Re-indexes the entire current NetworkX graph into the ChromaDB vector store.
-        Useful after importing a graph file externally.
+        Useful after importing a graph file externally or recovering from index corruption.
         """
         print(f"Re-indexing graph for workspace {self.workspace_id}...")
-        
-        # 1. Clear existing collection
+
+        # 1. Drop and recreate collection to ensure clean state (handles index corruption)
         try:
-            # Get all IDs to delete
-            existing = self.collection.get()
-            if existing and existing['ids']:
-                print(f"Deleting {len(existing['ids'])} existing embeddings...")
-                self.collection.delete(ids=existing['ids'])
+            self.chroma_client.delete_collection("entity_embeddings")
         except Exception as e:
-            print(f"Error clearing collection (might be empty): {e}")
+            print(f"Error deleting collection (might not exist): {e}")
+        self.collection = self.chroma_client.get_or_create_collection(
+            name="entity_embeddings",
+            metadata={"hnsw:space": "cosine"}
+        )
 
         # 2. Re-embed all nodes
         nodes_to_add = []

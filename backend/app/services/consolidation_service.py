@@ -158,9 +158,17 @@ def _run_consolidation(
                 include=["embeddings", "documents", "metadatas"]
             )
         except Exception as e:
-            log(f"Failed to fetch embeddings: {e}", log_type="error")
-            finish({"status": "error", "message": str(e), "logs": list(job["logs"])})
-            return
+            log(f"Failed to fetch embeddings ({e}), attempting reindex...", log_type="warning")
+            try:
+                mem.reindex_graph()
+                all_data = mem.collection.get(
+                    include=["embeddings", "documents", "metadatas"]
+                )
+                log("Reindex successful, continuing consolidation.")
+            except Exception as e2:
+                log(f"Reindex also failed: {e2}", log_type="error")
+                finish({"status": "error", "message": str(e2), "logs": list(job["logs"])})
+                return
 
         node_ids = all_data.get("ids")
         if node_ids is None:
@@ -225,8 +233,12 @@ def _run_consolidation(
                     continue
 
                 candidate_created = mem.graph.nodes[candidate_id].get("created_at", "")
-                if candidate_created and node_created and candidate_created <= node_created:
-                    continue
+                if candidate_created and node_created:
+                    if candidate_created < node_created:
+                        continue
+                    # For equal timestamps, use ID as tiebreaker so exactly one direction is kept
+                    if candidate_created == node_created and candidate_id <= node_id:
+                        continue
 
                 candidates.append({
                     "id": candidate_id,

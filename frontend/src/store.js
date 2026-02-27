@@ -87,7 +87,8 @@ export const useStore = create((set, get) => ({
             connectors: true,
             grow: true,
             theWay: true,
-            call: false
+            call: false,
+            terminal: false
         },
     },
     setUiSettings: (settings) => set({ uiSettings: settings }),
@@ -1794,6 +1795,82 @@ export const useStore = create((set, get) => ({
             }));
         } finally {
             set({ graphChatLoading: false });
+        }
+    },
+
+    // --- Terminal Chat State ---
+    terminalChatMessages: [],
+    terminalChatLoading: false,
+    terminalChatOpen: false,
+
+    setTerminalChatOpen: (open) => set({ terminalChatOpen: open }),
+
+    clearTerminalChat: () => set({ terminalChatMessages: [] }),
+
+    sendTerminalChatMessage: async (message) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+
+        // Snapshot existing messages as history (before adding new ones)
+        const history = get().terminalChatMessages
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .filter(m => m.content)
+            .map(m => ({ role: m.role, content: m.content }));
+
+        // Add user message
+        set(state => ({
+            terminalChatMessages: [...state.terminalChatMessages, { role: 'user', content: message }],
+            terminalChatLoading: true
+        }));
+
+        // Add placeholder for AI response
+        set(state => ({
+            terminalChatMessages: [...state.terminalChatMessages, { role: 'assistant', content: '' }]
+        }));
+
+        let rawContent = "";
+
+        try {
+            const response = await fetch(`${API_base}/terminal/${ws.id}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message, history })
+            });
+
+            if (!response.body) {
+                throw new Error("No response body");
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                rawContent += chunk;
+
+                const parsed = parseThinking(rawContent);
+
+                set(state => {
+                    const msgs = [...state.terminalChatMessages];
+                    const lastMsg = msgs[msgs.length - 1];
+                    if (lastMsg.role === 'assistant') {
+                        lastMsg.content = parsed.content;
+                        lastMsg.thinking = parsed.thinking || null;
+                        lastMsg.isThinking = parsed.isThinking;
+                    }
+                    return { terminalChatMessages: msgs };
+                });
+            }
+
+        } catch (e) {
+            console.error("Terminal chat error", e);
+            set(state => ({
+                terminalChatMessages: [...state.terminalChatMessages, { role: 'system', content: `Error: ${e.message}` }]
+            }));
+        } finally {
+            set({ terminalChatLoading: false });
         }
     }
 }));
