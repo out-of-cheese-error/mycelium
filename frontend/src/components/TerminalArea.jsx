@@ -2,8 +2,23 @@ import React, { useRef, useEffect } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
+import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 import { useStore } from '../store';
+
+// Load JetBrains Mono from Google Fonts so it's available everywhere
+const FONT_URL = 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap';
+let fontLoaded = false;
+function ensureFont() {
+    if (fontLoaded) return;
+    fontLoaded = true;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = FONT_URL;
+    document.head.appendChild(link);
+}
+
+const FONT_FAMILY = "'JetBrains Mono', monospace";
 
 const TerminalArea = () => {
     const termRef = useRef(null);
@@ -19,10 +34,16 @@ const TerminalArea = () => {
         if (!termRef.current || initRef.current) return;
         initRef.current = true;
 
+        ensureFont();
+
         const term = new Terminal({
             cursorBlink: true,
             fontSize: 14,
-            fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+            fontFamily: FONT_FAMILY,
+            fontWeight: '400',
+            fontWeightBold: '700',
+            letterSpacing: 0,
+            lineHeight: 1.1,
             theme: {
                 background: '#0a0a0a',
                 foreground: '#e4e4e7',
@@ -39,6 +60,7 @@ const TerminalArea = () => {
             },
             scrollback: 10000,
             convertEol: true,
+            allowProposedApi: true,
         });
 
         const fitAddon = new FitAddon();
@@ -48,11 +70,24 @@ const TerminalArea = () => {
         term.loadAddon(webLinksAddon);
         term.open(termRef.current);
 
+        // Load WebGL renderer for GPU-accelerated sharp text
+        try {
+            const webglAddon = new WebglAddon();
+            webglAddon.onContextLoss(() => {
+                webglAddon.dispose();
+            });
+            term.loadAddon(webglAddon);
+        } catch (e) {
+            console.warn('WebGL addon failed, using default canvas renderer:', e);
+        }
+
         xtermRef.current = term;
         fitAddonRef.current = fitAddon;
 
-        // Initial fit after DOM settles
-        requestAnimationFrame(() => fitAddon.fit());
+        // Wait for font to load before fitting so character metrics are correct
+        document.fonts.ready.then(() => {
+            requestAnimationFrame(() => fitAddon.fit());
+        });
 
         // --- WebSocket connection ---
         const wsUrl = `${API_BASE.replace(/^http/, 'ws')}/terminal/ws`;
