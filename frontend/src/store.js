@@ -87,7 +87,8 @@ export const useStore = create((set, get) => ({
             connectors: true,
             grow: true,
             theWay: true,
-            call: false
+            call: false,
+            terminal: false
         },
     },
     setUiSettings: (settings) => set({ uiSettings: settings }),

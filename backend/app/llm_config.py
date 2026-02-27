@@ -77,7 +77,8 @@ class LLMConfigModel(BaseModel):
         "connectors": True,
         "grow": True,
         "theWay": True,
-        "call": False
+        "call": False,
+        "terminal": False
     }
 
     # Memory Extraction Settings (LightMem-inspired)

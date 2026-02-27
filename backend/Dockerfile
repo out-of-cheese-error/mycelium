@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g opencode-ai
 
 # Copy the requirements file into the container at /app
 COPY requirements.txt .
@@ -25,8 +26,9 @@ COPY . .
 # Make port 8000 available to the world outside this container
 EXPOSE 8000
 
-# Define environment variable
+# Define environment variables
 ENV PORT=8000
+ENV OPENCODE_CONFIG=/app/.opencode/opencode.json
 
 # Run uvicorn when the container launches
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

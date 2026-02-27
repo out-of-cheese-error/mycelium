@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from app.agent import app_agent, run_background_extraction_and_emotions
 from app.memory_store import GraphMemory
-from app.routers import workspaces, threads, system, audio, concepts, hot_topics, connectors, graph_chat, skills, call
+from app.routers import workspaces, threads, system, audio, concepts, hot_topics, connectors, graph_chat, skills, call, terminal
 import os
 import uvicorn
 
@@ -32,6 +32,7 @@ app.include_router(connectors.router)
 app.include_router(graph_chat.router)
 app.include_router(skills.router)
 app.include_router(call.router)
+app.include_router(terminal.router)
 
 
 # --- MCP Server Lifecycle ---
@@ -44,6 +45,14 @@ async def startup_event():
         restore_buffers_from_disk()
     except Exception as e:
         print(f"Buffer restore: {e}")
+
+    # Generate OpenCode TUI config from LLM settings
+    try:
+        from app.services.opencode_config_service import sync_opencode_config
+        sync_opencode_config()
+        print("OpenCode: Config synced from llm_config.json")
+    except Exception as e:
+        print(f"OpenCode: Config sync failed: {e}")
 
     # Connect to MCP servers
     try:

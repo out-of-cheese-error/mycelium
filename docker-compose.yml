@@ -20,6 +20,7 @@ services:
       - LLM_CONFIG_FILE=/app/config/llm_config.json
       # Set the memory base directory
       - MEMORY_BASE_DIR=/app/memory_data
+      - OPENCODE_CONFIG=/app/.opencode/opencode.json
 
   frontend:
     build: ./frontend
