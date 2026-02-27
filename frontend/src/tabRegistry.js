@@ -1,4 +1,4 @@
-import { MessageSquare, Network, Notebook, BookOpen, Layers, Flame, Route, BrainCircuit, Compass, Phone, TerminalSquare } from 'lucide-react';
+import { MessageSquare, Network, Notebook, BookOpen, Layers, Flame, Route, BrainCircuit, Compass, Phone, SquareTerminal } from 'lucide-react';
 
 /**
  * Central registry of all available tabs.
@@ -21,7 +21,7 @@ export const TAB_REGISTRY = [
     { id: 'grow', label: 'Grow', icon: BrainCircuit, description: 'Expand your knowledge graph by ingesting new documents, URLs, and content.' },
     { id: 'theWay', label: 'theWay', icon: Compass, activeColor: 'bg-purple-600', description: 'Custom skills and workflows to enhance your AI assistant\'s capabilities.' },
     { id: 'call', label: 'Call', icon: Phone, activeColor: 'bg-green-600', description: 'Live voice conversation with your AI assistant.' },
-    { id: 'terminal', label: 'Terminal', icon: TerminalSquare, activeColor: 'bg-gray-600', description: 'Terminal access to the backend container with OpenCode TUI.' },
+    { id: 'terminal', label: 'Terminal', icon: SquareTerminal, activeColor: 'bg-gray-600', description: 'Terminal access to the backend container with OpenCode TUI.' },
 ];
 
 /**
