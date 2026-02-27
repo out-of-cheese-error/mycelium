@@ -59,6 +59,12 @@ async def create_workspace(request: CreateWorkspaceRequest):
 
 @router.delete("/{workspace_id}")
 async def delete_workspace(workspace_id: str):
+    # Kill tmux session for this workspace if it exists
+    try:
+        from app.services.terminal_session_service import terminal_session_service
+        terminal_session_service.kill_session(workspace_id)
+    except Exception:
+        pass
     path = os.path.join(MEMORY_BASE_DIR, workspace_id)
     if os.path.exists(path):
         shutil.rmtree(path)
@@ -112,7 +118,9 @@ class WorkspaceSettings(BaseModel):
         # Science / Research
         "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
         # Utility
-        "generate_lesson"
+        "generate_lesson",
+        # Terminal
+        "execute_terminal_command"
     ]
     
     # Context Settings (Per Workspace)

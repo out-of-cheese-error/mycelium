@@ -15,7 +15,14 @@ async def get_system_config():
 @router.post("/config", response_model=LLMConfigModel)
 async def update_system_config(config: LLMConfigModel):
     llm_config.update_config(config)
-    
+
+    # Keep OpenCode TUI config in sync with LLM settings
+    try:
+        from app.services.opencode_config_service import sync_opencode_config
+        sync_opencode_config()
+    except Exception as e:
+        print(f"OpenCode: Config sync failed after update: {e}")
+
     # Refresh MCP server connections after config update
     try:
         from app.services.mcp_service import refresh_mcp_servers

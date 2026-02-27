@@ -20,25 +20,25 @@ class LLMConfigModel(BaseModel):
     embedding_provider: Literal["openai", "ollama", "lmstudio"] = "lmstudio"
     
     # Chat Settings (used for openai/lmstudio providers)
-    chat_base_url: str = "http://localhost:1234/v1"
+    chat_base_url: str = "http://host.docker.internal:1234/v1"
     chat_api_key: str = "lm-studio"
     chat_model: str = "qwen/qwen3-vl-30b"
     temperature: float = 0.7
-    
+
     # Embedding Settings (used for openai/lmstudio providers)
-    embedding_base_url: str = "http://localhost:1234/v1"
+    embedding_base_url: str = "http://host.docker.internal:1234/v1"
     embedding_api_key: str = "lm-studio"
     embedding_model: str = "text-embedding-nomic-embed-text-v1.5"
-    
+
     # Ollama Settings
-    ollama_base_url: str = "http://localhost:11434"
+    ollama_base_url: str = "http://host.docker.internal:11434"
     ollama_chat_model: str = "llama3.2"
     ollama_embedding_model: str = "nomic-embed-text"
 
     # Ingestion LLM Settings (optional, separate LLM for graph building/entity extraction)
     ingestion_llm_enabled: bool = False  # If False, uses the Chat LLM for ingestion
     ingestion_provider: Literal["openai", "ollama", "lmstudio"] = "lmstudio"
-    ingestion_base_url: str = "http://localhost:1234/v1"
+    ingestion_base_url: str = "http://host.docker.internal:1234/v1"
     ingestion_api_key: str = "lm-studio"
     ingestion_model: str = ""
     ingestion_ollama_model: str = "llama3.2"  # Used when ingestion_provider is "ollama"
@@ -77,7 +77,8 @@ class LLMConfigModel(BaseModel):
         "connectors": True,
         "grow": True,
         "theWay": True,
-        "call": False
+        "call": False,
+        "terminal": False
     }
 
     # Memory Extraction Settings (LightMem-inspired)
