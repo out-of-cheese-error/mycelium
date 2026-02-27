@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 import { useStore } from '../store';
+import TerminalChat from './TerminalChat';
 
 // Load JetBrains Mono from Google Fonts so it's available everywhere
 const FONT_URL = 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap';
@@ -25,14 +26,13 @@ const TerminalArea = () => {
     const xtermRef = useRef(null);
     const fitAddonRef = useRef(null);
     const wsRef = useRef(null);
-    const initRef = useRef(false);
+    const observerRef = useRef(null);
 
     const API_BASE = useStore((s) => s.API_BASE);
+    const currentWorkspace = useStore((s) => s.currentWorkspace);
 
     useEffect(() => {
-        // Guard against double-init in StrictMode / HMR
-        if (!termRef.current || initRef.current) return;
-        initRef.current = true;
+        if (!termRef.current || !currentWorkspace) return;
 
         ensureFont();
 
@@ -84,50 +84,55 @@ const TerminalArea = () => {
         xtermRef.current = term;
         fitAddonRef.current = fitAddon;
 
-        // Wait for font to load before fitting so character metrics are correct
+        // Wait for font to load, fit the terminal to get correct dimensions,
+        // THEN connect the WebSocket so the first resize message is accurate.
         document.fonts.ready.then(() => {
-            requestAnimationFrame(() => fitAddon.fit());
-        });
+            requestAnimationFrame(() => {
+                fitAddon.fit();
+                console.log('[Terminal] after fit:', term.cols, 'x', term.rows);
 
-        // --- WebSocket connection ---
-        const wsUrl = `${API_BASE.replace(/^http/, 'ws')}/terminal/ws`;
-        const socket = new WebSocket(wsUrl);
-        wsRef.current = socket;
-        socket.binaryType = 'arraybuffer';
+                // --- WebSocket connection (after fit) ---
+                const wsUrl = `${API_BASE.replace(/^http/, 'ws')}/terminal/${currentWorkspace.id}/ws`;
+                const socket = new WebSocket(wsUrl);
+                wsRef.current = socket;
+                socket.binaryType = 'arraybuffer';
 
-        socket.onopen = () => {
-            const { cols, rows } = term;
-            socket.send(JSON.stringify({ type: 'resize', cols, rows }));
-        };
+                socket.onopen = () => {
+                    const { cols, rows } = term;
+                    console.log('[Terminal] onopen dimensions:', cols, 'x', rows);
+                    socket.send(JSON.stringify({ type: 'resize', cols, rows }));
+                };
 
-        socket.onmessage = (event) => {
-            if (event.data instanceof ArrayBuffer) {
-                term.write(new Uint8Array(event.data));
-            } else {
-                term.write(event.data);
-            }
-        };
+                socket.onmessage = (event) => {
+                    if (event.data instanceof ArrayBuffer) {
+                        term.write(new Uint8Array(event.data));
+                    } else {
+                        term.write(event.data);
+                    }
+                };
 
-        socket.onerror = () => {
-            term.write('\r\n\x1b[31mWebSocket connection error\x1b[0m\r\n');
-        };
+                socket.onerror = () => {
+                    term.write('\r\n\x1b[31mWebSocket connection error\x1b[0m\r\n');
+                };
 
-        socket.onclose = () => {
-            term.write('\r\n\x1b[33mSession ended. Refresh to reconnect.\x1b[0m\r\n');
-        };
+                socket.onclose = () => {
+                    term.write('\r\n\x1b[33mSession ended. Switch tabs to reconnect.\x1b[0m\r\n');
+                };
 
-        // Terminal input -> WebSocket (binary)
-        term.onData((data) => {
-            if (socket.readyState === WebSocket.OPEN) {
-                socket.send(new TextEncoder().encode(data));
-            }
-        });
+                // Terminal input -> WebSocket (binary)
+                term.onData((data) => {
+                    if (socket.readyState === WebSocket.OPEN) {
+                        socket.send(new TextEncoder().encode(data));
+                    }
+                });
 
-        // Notify backend of resize
-        term.onResize(({ cols, rows }) => {
-            if (socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({ type: 'resize', cols, rows }));
-            }
+                // Notify backend of resize
+                term.onResize(({ cols, rows }) => {
+                    if (socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify({ type: 'resize', cols, rows }));
+                    }
+                });
+            });
         });
 
         // Re-fit when container size changes
@@ -139,18 +144,28 @@ const TerminalArea = () => {
             }
         });
         observer.observe(termRef.current);
+        observerRef.current = observer;
 
         return () => {
             observer.disconnect();
-            socket.close();
+            if (wsRef.current) wsRef.current.close();
             term.dispose();
-            initRef.current = false;
         };
-    }, [API_BASE]);
+    }, [API_BASE, currentWorkspace?.id]);
+
+    // No workspace selected
+    if (!currentWorkspace) {
+        return (
+            <div className="h-full w-full bg-[#0a0a0a] flex items-center justify-center">
+                <p className="text-gray-500 text-sm">Select a workspace to open a terminal.</p>
+            </div>
+        );
+    }
 
     return (
-        <div className="h-full w-full bg-[#0a0a0a] p-1">
+        <div className="h-full w-full bg-[#0a0a0a] p-1 relative">
             <div ref={termRef} className="h-full w-full" />
+            <TerminalChat />
         </div>
     );
 };

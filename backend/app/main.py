@@ -78,6 +78,14 @@ async def shutdown_event():
     except Exception as e:
         print(f"Buffer save: {e}")
 
+    # Kill all tmux sessions
+    try:
+        import subprocess
+        subprocess.run(["tmux", "kill-server"], capture_output=True)
+        print("Terminal: tmux server killed")
+    except Exception as e:
+        print(f"Terminal: tmux cleanup: {e}")
+
     # Disconnect MCP servers
     try:
         from app.services.mcp_service import mcp_service

@@ -3,6 +3,7 @@ import operator
 import json
 import re
 import os
+import subprocess
 import uuid
 import time
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage, ToolMessage
@@ -15,6 +16,7 @@ from app.llm_config import llm_config
 from langchain_core.tools import tool
 from app.services.twitch_service import twitch_service
 from app.services.youtube_service import youtube_service
+from app.services.terminal_session_service import terminal_session_service
 
 @tool
 def create_note(title: str, content: str, workspace_id: str = "default"):
@@ -1080,8 +1082,44 @@ def search_youtube(query: str):
         return f"Failed to search YouTube: {e}"
 
 
+@tool
+def execute_terminal_command(command: str, workspace_id: str = "default"):
+    """Execute a shell command in the workspace's persistent terminal session.
+    Returns the command output. Use this for file operations, system checks,
+    running scripts, installing packages, or any shell task the user requests.
+
+    Args:
+        command: The shell command to execute
+        workspace_id: The workspace ID (injected automatically)
+
+    Returns:
+        The stdout/stderr output of the command
+    """
+    try:
+        cwd = terminal_session_service._workspace_dir(workspace_id)
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=30,
+            env={**os.environ, "TERM": "xterm-256color"},
+        )
+        output = result.stdout
+        if result.stderr:
+            if output:
+                output += "\n"
+            output += result.stderr
+        return output.strip() if output else "(no output)"
+    except subprocess.TimeoutExpired:
+        return f"[Command timed out after 30s]"
+    except Exception as e:
+        return f"Terminal command failed: {e}"
+
+
 tools = [
-    DuckDuckGoSearchRun(), create_note, read_note, update_note, list_notes, delete_note, search_notes, 
+    DuckDuckGoSearchRun(), create_note, read_note, update_note, list_notes, delete_note, search_notes,
     visit_page, search_images, generate_lesson, search_reddit, browse_subreddit, read_reddit_thread, 
     get_reddit_user, search_concepts,
     add_graph_node, update_graph_node, add_graph_edge, update_graph_edge, search_graph_nodes, traverse_graph_node,
@@ -1094,7 +1132,8 @@ tools = [
     consult_workspace, list_expert_workspaces,
     lookup_skill, create_skill,
     read_twitch_chat, ingest_twitch_chat,
-    search_youtube, read_youtube_transcript, ingest_youtube_transcript
+    search_youtube, read_youtube_transcript, ingest_youtube_transcript,
+    execute_terminal_command
 ]
 
 
@@ -1324,10 +1363,12 @@ def generate_node(state: AgentState, config: RunnableConfig):
         # Skills (theWay)
         "lookup_skill", "create_skill",
         # Social / Streaming
-        "read_twitch_chat"
+        "read_twitch_chat",
+        # Terminal
+        "execute_terminal_command"
     ]
     enabled_tools = DEFAULT_ENABLED_TOOLS  # Default to curated list
-    
+
     try:
         config_path = f"./memory_data/{workspace_id}/config.json"
         with open(config_path, 'r') as f:
@@ -1578,7 +1619,8 @@ def generate_node(state: AgentState, config: RunnableConfig):
                         "add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge", "delete_graph_node", "delete_graph_edge",
                         "search_graph_nodes", "traverse_graph_node", "search_concepts",
                         "ingest_web_page", "ingest_gutenberg_book", "ingest_wikipedia_page", "check_ingestion_status", "generate_lesson",
-                        "ingest_biorxiv_article", "search_reddit", "read_note"
+                        "ingest_biorxiv_article", "search_reddit", "read_note",
+                        "execute_terminal_command"
                     ]:
                         print(f"DEBUG: Injecting workspace_id='{workspace_id}' into tool '{tc['name']}'")
                         tc["args"]["workspace_id"] = workspace_id
@@ -1846,9 +1888,10 @@ async def dynamic_tool_node(state: AgentState, config: RunnableConfig):
         "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
         "generate_lesson",
         "lookup_skill", "create_skill",
-        "read_twitch_chat"
+        "read_twitch_chat",
+        "execute_terminal_command"
     ]
-    
+
     # Load enabled_tools from workspace config
     enabled_tools = DEFAULT_ENABLED_TOOLS
     try:
