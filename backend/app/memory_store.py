@@ -265,6 +265,67 @@ class GraphMemory:
         
         return "\n\n---\n\n".join(hits) if hits else "No matching skills found."
     
+    def search_skills_with_scores(self, query: str, k: int = 5) -> list:
+        """
+        Searches skills by semantic similarity and returns lightweight metadata with scores.
+        Used by retrieve_node for automatic skill surfacing (progressive disclosure).
+        Returns list of {id, title, summary, explanation, similarity} dicts.
+        Similarity is in [0, 1] range (1 = perfect match).
+        """
+        try:
+            count = self.skill_collection.count()
+            if count == 0:
+                return []
+            n = min(k, count)
+            query_embedding = self.embedding_fn.embed_query(query)
+            results = self.skill_collection.query(
+                query_embeddings=[query_embedding],
+                n_results=n,
+                include=["metadatas", "distances", "documents"]
+            )
+        except Exception as e:
+            print(f"WARNING: Skill search with scores failed: {e}")
+            return []
+
+        hits = []
+        if results["ids"] and results["ids"][0]:
+            for i, skill_id in enumerate(results["ids"][0]):
+                meta = results["metadatas"][0][i]
+                similarity = 1.0 - (results["distances"][0][i] / 2.0)
+                hits.append({
+                    "id": skill_id,
+                    "title": meta.get("title", "Unknown"),
+                    "summary": meta.get("summary", ""),
+                    "explanation": meta.get("explanation", ""),
+                    "similarity": round(similarity, 4),
+                })
+        return hits
+
+    def get_all_skill_summaries(self) -> list:
+        """
+        Returns all skills with just id, title, and summary (no explanation).
+        Used for persistent context mode where all skills are always visible.
+        """
+        try:
+            count = self.skill_collection.count()
+            if count == 0:
+                return []
+            results = self.skill_collection.get(include=["metadatas"])
+        except Exception as e:
+            print(f"WARNING: Get all skill summaries failed: {e}")
+            return []
+
+        summaries = []
+        if results["ids"]:
+            for i, skill_id in enumerate(results["ids"]):
+                meta = results["metadatas"][i]
+                summaries.append({
+                    "id": skill_id,
+                    "title": meta.get("title", "Unknown"),
+                    "summary": meta.get("summary", ""),
+                })
+        return summaries
+
     def get_skill_by_id(self, skill_id: str) -> dict:
         """Gets a specific skill by ID from the vector store."""
         try:

@@ -18,6 +18,11 @@ from app.services.twitch_service import twitch_service
 from app.services.youtube_service import youtube_service
 from app.services.terminal_session_service import terminal_session_service
 
+# --- Skill Auto-surfacing Defaults (overridable per workspace via config.json) ---
+SKILL_SURFACE_THRESHOLD = 0.50       # Tier 1: surface title+summary in context
+SKILL_AUTO_INJECT_THRESHOLD = 0.85   # Tier 2: inject full instructions directly
+SKILL_SURFACE_MAX = 5                # Max skills surfaced per turn
+
 @tool
 def create_note(title: str, content: str, workspace_id: str = "default"):
     """Creates a new note with the given title and Markdown content."""
@@ -894,8 +899,12 @@ def list_expert_workspaces():
 def lookup_skill(query: str, workspace_id: str = "default"):
     """
     Searches for learned skills matching the query and returns their full instructions.
-    Use this when the user asks you to apply a skill (e.g., "use your email writing skill to...").
-    The returned instructions tell you HOW to perform the skill - follow them carefully.
+
+    Use this in two scenarios:
+    1. When relevant skills appear under "YOUR LEARNED SKILLS" or "AVAILABLE SKILLS" in your context — call this with the skill's title to get full instructions.
+    2. When you want to proactively search for a skill by topic, even if none were auto-surfaced.
+
+    The returned instructions tell you HOW to perform the skill — follow them carefully.
     """
     try:
         mem = GraphMemory(workspace_id=workspace_id)
@@ -1321,16 +1330,102 @@ async def retrieve_node(state: AgentState):
             print(f"WARNING: Retrieval failed: {e}")
             rag_context = ""
             
+        # 3. Skill Auto-surfacing (Claude-style progressive disclosure)
+        # Load skill settings from workspace config
+        skill_persistent = False
+        skill_persistent_max_words = 150
+        skill_surface_threshold = SKILL_SURFACE_THRESHOLD
+        skill_auto_inject_threshold = SKILL_AUTO_INJECT_THRESHOLD
+        skill_surface_max = SKILL_SURFACE_MAX
+        try:
+            config_path = os.path.join("memory_data", workspace_id, "config.json")
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    ws_config_skills = json.load(f)
+                    skill_persistent = ws_config_skills.get("skill_persistent_context", False)
+                    skill_persistent_max_words = ws_config_skills.get("skill_persistent_max_words", 150)
+                    skill_surface_threshold = ws_config_skills.get("skill_surface_threshold", SKILL_SURFACE_THRESHOLD)
+                    skill_auto_inject_threshold = ws_config_skills.get("skill_auto_inject_threshold", SKILL_AUTO_INJECT_THRESHOLD)
+                    skill_surface_max = ws_config_skills.get("skill_surface_max", SKILL_SURFACE_MAX)
+        except Exception:
+            pass
+
+        skill_context = ""
+        persistent_skill_ids = set()
+        try:
+            skill_parts = []
+
+            # A) Persistent context: always inject all skill titles+summaries
+            if skill_persistent:
+                all_summaries = await asyncio.to_thread(
+                    memory_store.get_all_skill_summaries
+                )
+                if all_summaries:
+                    skill_parts.append("### YOUR LEARNED SKILLS:")
+                    for s in all_summaries:
+                        persistent_skill_ids.add(s["id"])
+                        # Truncate summary to max words
+                        words = s["summary"].split()
+                        truncated = " ".join(words[:skill_persistent_max_words])
+                        if len(words) > skill_persistent_max_words:
+                            truncated += "..."
+                        skill_parts.append(f"- **{s['title']}**: {truncated}")
+
+            # B) Similarity-based surfacing
+            skill_hits = await asyncio.to_thread(
+                memory_store.search_skills_with_scores,
+                content_text,
+                skill_surface_max
+            )
+
+            tier1_skills = []
+            tier2_skills = []
+            for hit in skill_hits:
+                if hit["similarity"] >= skill_auto_inject_threshold:
+                    tier2_skills.append(hit)
+                elif hit["similarity"] >= skill_surface_threshold:
+                    # Skip if already in persistent context
+                    if hit["id"] not in persistent_skill_ids:
+                        tier1_skills.append(hit)
+
+            if tier2_skills:
+                skill_parts.append("### HIGHLY RELEVANT SKILLS (Apply these directly):")
+                for s in tier2_skills:
+                    skill_parts.append(
+                        f"**Skill: {s['title']}** (ID: {s['id']})\n"
+                        f"Summary: {s['summary']}\n\n"
+                        f"Instructions:\n{s['explanation']}"
+                    )
+
+            if tier1_skills:
+                skill_parts.append(
+                    "### AVAILABLE SKILLS (use `lookup_skill` to get full instructions):"
+                )
+                for s in tier1_skills:
+                    skill_parts.append(f"- **{s['title']}** (ID: {s['id']}): {s['summary']}")
+
+            if skill_parts:
+                skill_context = "\n".join(skill_parts)
+                print(f"DEBUG: Surfaced {len(tier2_skills)} Tier-2 + {len(tier1_skills)} Tier-1 skills"
+                      f"{' + ' + str(len(persistent_skill_ids)) + ' persistent' if persistent_skill_ids else ''}")
+        except Exception as e:
+            print(f"WARNING: Skill auto-surfacing failed: {e}")
+            skill_context = ""
+
         # Combine
         parts = []
         if explicit_context:
             parts.append("### EXPLICITLY REFERENCED CONTEXT (@Mentions):")
             parts.append("\n\n".join(explicit_context))
             parts.append("### RELEVANT MEMORY (Automatic):")
-            
+
         parts.append(rag_context)
+
+        if skill_context:
+            parts.append(skill_context)
+
         context = "\n".join(parts)
-        
+
         print(f"DEBUG: Final Context Length: {len(context)} chars")
 
     return {"context": context}
@@ -1511,6 +1606,14 @@ def generate_node(state: AgentState, config: RunnableConfig):
     - The Concept summary is just a starting point. Your "Graph RAG" (Graph Retrieval) has already provided detailed relationships in the "CONTEXT FROM LONG-TERM MEMORY" section above.
     - MERGE information from the 'search_concepts' result and the 'CONTEXT' to provide a comprehensive answer.
     - PROACTIVELY PROMOTE your Graph capabilities: Tell the user you can "traverse the graph" or "trace relationships" for specific entities to uncover deeper connections if they wish.
+
+    GUIDANCE ON SKILLS (theWay):
+    - Skills you have learned may appear in the "CONTEXT FROM LONG-TERM MEMORY" section above.
+    - "YOUR LEARNED SKILLS" lists all skills you know — use `lookup_skill` with the skill's title to get full instructions before applying one.
+    - "HIGHLY RELEVANT SKILLS" includes full instructions for skills that closely match the user's request — apply these directly without calling `lookup_skill`.
+    - "AVAILABLE SKILLS" shows skills that may be relevant — call `lookup_skill` to retrieve full instructions.
+    - You can also proactively call `lookup_skill` to search for any skill by topic, even if none were auto-surfaced.
+    - Do NOT make up skill instructions — always retrieve them via `lookup_skill` or use the injected instructions.
     """
     
     

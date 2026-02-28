@@ -129,6 +129,13 @@ class WorkspaceSettings(BaseModel):
     graph_depth: int = 1
     graph_include_descriptions: bool = False
     
+    # Skill Auto-surfacing Settings (theWay)
+    skill_persistent_context: bool = False        # Always inject all skill titles+summaries
+    skill_persistent_max_words: int = 150         # Max words per skill in persistent context
+    skill_surface_threshold: float = 0.50         # Tier 1: surface title+summary
+    skill_auto_inject_threshold: float = 0.85     # Tier 2: inject full instructions
+    skill_surface_max: int = 5                    # Max skills surfaced per turn
+
     # Workspace-as-Tool Settings
     is_tool_enabled: bool = False
     tool_name: Optional[str] = None  # e.g., "physics_expert" -> becomes "ask_physics_expert"
