@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useStore } from '../store';
 import {
-    Save, Plus, Trash2, Compass, Check, Loader2, X, Edit2
+    Save, Plus, Trash2, Compass, Check, Loader2, X, Edit2, Settings2
 } from 'lucide-react';
 
 // Toast notification component
@@ -52,7 +52,9 @@ const SkillsArea = () => {
         createSkill,
         updateSkill,
         deleteSkill,
-        selectSkill
+        selectSkill,
+        fetchWorkspaceSettings,
+        updateWorkspaceSettings
     } = useStore();
 
     const [editTitle, setEditTitle] = useState("");
@@ -63,12 +65,70 @@ const SkillsArea = () => {
     const saveTimeoutRef = useRef(null);
     const lastSavedContent = useRef({ title: '', summary: '', explanation: '' });
 
+    // Settings panel state
+    const [showSettings, setShowSettings] = useState(false);
+    const [skillSettings, setSkillSettings] = useState({
+        skill_persistent_context: false,
+        skill_persistent_max_words: 150,
+        skill_surface_threshold: 0.50,
+        skill_auto_inject_threshold: 0.85,
+        skill_surface_max: 5,
+    });
+    const [settingsLoaded, setSettingsLoaded] = useState(false);
+    const settingsSaveRef = useRef(null);
+
     // Initial Fetch
     useEffect(() => {
         if (currentWorkspace) {
             fetchSkillsList(currentWorkspace.id);
         }
     }, [currentWorkspace]);
+
+    // Fetch skill settings when workspace changes or settings panel opens
+    useEffect(() => {
+        if (currentWorkspace && showSettings && !settingsLoaded) {
+            fetchWorkspaceSettings(currentWorkspace.id).then(data => {
+                if (data) {
+                    setSkillSettings({
+                        skill_persistent_context: data.skill_persistent_context ?? false,
+                        skill_persistent_max_words: data.skill_persistent_max_words ?? 150,
+                        skill_surface_threshold: data.skill_surface_threshold ?? 0.50,
+                        skill_auto_inject_threshold: data.skill_auto_inject_threshold ?? 0.85,
+                        skill_surface_max: data.skill_surface_max ?? 5,
+                    });
+                }
+                setSettingsLoaded(true);
+            });
+        }
+    }, [currentWorkspace, showSettings, settingsLoaded]);
+
+    // Reset settings loaded state when workspace changes
+    useEffect(() => {
+        setSettingsLoaded(false);
+    }, [currentWorkspace]);
+
+    // Auto-save settings with debounce
+    const saveSettings = useCallback((newSettings) => {
+        setSkillSettings(newSettings);
+        if (!currentWorkspace) return;
+
+        if (settingsSaveRef.current) {
+            clearTimeout(settingsSaveRef.current);
+        }
+        settingsSaveRef.current = setTimeout(async () => {
+            try {
+                const fullSettings = await fetchWorkspaceSettings(currentWorkspace.id);
+                if (fullSettings) {
+                    await updateWorkspaceSettings(currentWorkspace.id, {
+                        ...fullSettings,
+                        ...newSettings,
+                    });
+                }
+            } catch (e) {
+                setToast({ message: 'Failed to save skill settings', type: 'error' });
+            }
+        }, 1000);
+    }, [currentWorkspace, fetchWorkspaceSettings, updateWorkspaceSettings]);
 
     // Update local state when active skill changes
     useEffect(() => {
@@ -298,14 +358,116 @@ The AI will follow these instructions when you ask it to "use your email writing
                             <Compass size={16} className="text-purple-400" />
                             <span className="font-semibold text-gray-400 text-sm">THE WAY</span>
                         </div>
-                        <button
-                            onClick={handleCreate}
-                            className="p-1.5 hover:bg-gray-800 rounded-lg text-purple-400 transition-colors"
-                            title="Create Skill"
-                        >
-                            <Plus size={18} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => setShowSettings(!showSettings)}
+                                className={`p-1.5 hover:bg-gray-800 rounded-lg transition-colors ${showSettings ? 'text-purple-400 bg-gray-800' : 'text-gray-500'}`}
+                                title="Skill Discovery Settings"
+                            >
+                                <Settings2 size={16} />
+                            </button>
+                            <button
+                                onClick={handleCreate}
+                                className="p-1.5 hover:bg-gray-800 rounded-lg text-purple-400 transition-colors"
+                                title="Create Skill"
+                            >
+                                <Plus size={18} />
+                            </button>
+                        </div>
                     </div>
+
+                    {/* Skill Discovery Settings Panel */}
+                    {showSettings && (
+                        <div className="px-3 py-3 border-b border-gray-800 bg-gray-800/30 space-y-3">
+                            <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Discovery Settings</p>
+
+                            {/* Persistent Context Toggle */}
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs text-gray-400 cursor-pointer" htmlFor="skillPersistent">
+                                    Always show skills
+                                </label>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        id="skillPersistent"
+                                        checked={skillSettings.skill_persistent_context}
+                                        onChange={e => saveSettings({ ...skillSettings, skill_persistent_context: e.target.checked })}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-9 h-5 rounded-full transition-colors"
+                                        style={{ backgroundColor: skillSettings.skill_persistent_context ? '#9333ea' : '#374151' }}>
+                                        <div className={`absolute top-[2px] ${skillSettings.skill_persistent_context ? 'left-[18px]' : 'left-[2px]'} w-4 h-4 rounded-full bg-white transition-all`} />
+                                    </div>
+                                </label>
+                            </div>
+
+                            {/* Max Words per Skill (only when persistent is on) */}
+                            {skillSettings.skill_persistent_context && (
+                                <div>
+                                    <label className="block text-[10px] text-gray-500 mb-1">
+                                        Max words/skill: {skillSettings.skill_persistent_max_words}
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="50" max="500" step="25"
+                                        className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+                                        style={{ backgroundColor: '#1f2937', accentColor: '#9333ea' }}
+                                        value={skillSettings.skill_persistent_max_words}
+                                        onChange={e => saveSettings({ ...skillSettings, skill_persistent_max_words: parseInt(e.target.value) })}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Surface Threshold */}
+                            <div>
+                                <label className="block text-[10px] text-gray-500 mb-1">
+                                    Surface threshold: {skillSettings.skill_surface_threshold.toFixed(2)}
+                                </label>
+                                <input
+                                    type="range"
+                                    min="0.10" max="0.90" step="0.05"
+                                    className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+                                    style={{ backgroundColor: '#1f2937', accentColor: '#9333ea' }}
+                                    value={skillSettings.skill_surface_threshold}
+                                    onChange={e => saveSettings({ ...skillSettings, skill_surface_threshold: parseFloat(e.target.value) })}
+                                />
+                            </div>
+
+                            {/* Auto-inject Threshold */}
+                            <div>
+                                <label className="block text-[10px] text-gray-500 mb-1">
+                                    Auto-inject threshold: {skillSettings.skill_auto_inject_threshold.toFixed(2)}
+                                </label>
+                                <input
+                                    type="range"
+                                    min="0.50" max="1.00" step="0.05"
+                                    className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+                                    style={{ backgroundColor: '#1f2937', accentColor: '#9333ea' }}
+                                    value={skillSettings.skill_auto_inject_threshold}
+                                    onChange={e => saveSettings({ ...skillSettings, skill_auto_inject_threshold: parseFloat(e.target.value) })}
+                                />
+                            </div>
+
+                            {/* Max Skills Surfaced */}
+                            <div>
+                                <label className="block text-[10px] text-gray-500 mb-1">
+                                    Max surfaced: {skillSettings.skill_surface_max}
+                                </label>
+                                <input
+                                    type="range"
+                                    min="1" max="20" step="1"
+                                    className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+                                    style={{ backgroundColor: '#1f2937', accentColor: '#9333ea' }}
+                                    value={skillSettings.skill_surface_max}
+                                    onChange={e => saveSettings({ ...skillSettings, skill_surface_max: parseInt(e.target.value) })}
+                                />
+                            </div>
+
+                            <p className="text-[9px] text-gray-600 leading-tight">
+                                Surface: show title+summary. Auto-inject: include full instructions. Lower thresholds = more skills surfaced.
+                            </p>
+                        </div>
+                    )}
 
                     <div className="flex-1 overflow-y-auto">
                         {skillsList.length === 0 ? (
