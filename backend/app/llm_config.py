@@ -78,6 +78,7 @@ class LLMConfigModel(BaseModel):
         "grow": True,
         "theWay": True,
         "call": False,
+        "tts_reader": False,
         "terminal": False
     }
 

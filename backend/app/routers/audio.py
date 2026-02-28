@@ -25,7 +25,32 @@ _EMOJI_RE = re.compile(
     flags=re.UNICODE,
 )
 
+def _strip_markdown(text: str) -> str:
+    """Remove common markdown formatting artifacts for cleaner TTS output."""
+    text = re.sub(r'```[\s\S]*?```', '', text)           # code blocks
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)  # headers
+    text = re.sub(r'\*{1,3}(.*?)\*{1,3}', r'\1', text)   # bold/italic
+    text = re.sub(r'_{1,3}(.*?)_{1,3}', r'\1', text)      # underscored bold/italic
+    text = re.sub(r'!\[([^\]]*)\]\([^)]+\)', r'\1', text)  # images
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)   # links
+    text = re.sub(r'`([^`]+)`', r'\1', text)               # inline code
+    text = re.sub(r'^[-*_]{3,}\s*$', '', text, flags=re.MULTILINE)  # horizontal rules
+    text = re.sub(r'^>\s?', '', text, flags=re.MULTILINE)  # blockquotes
+    text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)   # unordered list markers
+    text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)   # ordered list markers
+    return text
+
+def _strip_references(text: str) -> str:
+    """Remove citations, references, and wiki-style annotations."""
+    text = re.sub(r'\[(?:Image|File|Category|Citation needed)[^\]]*\]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\[\d+\]', '', text)                # [1], [32]
+    text = re.sub(r'\[[\w\s,]+\]', '', text)           # [a], [note 1], [edit]
+    text = re.sub(r'\{\{[^}]*\}\}', '', text)          # {{template}} wiki markup
+    return text
+
 def _clean_for_tts(text: str) -> str:
+    text = _strip_references(text)
+    text = _strip_markdown(text)
     text = _EMOJI_RE.sub(" ", text)
     text = re.sub(r" {2,}", " ", text)
     return text.strip()
@@ -145,3 +170,42 @@ async def generate_speech(request: SpeechRequest):
 @router.get("/stream")
 async def stream_speech(input: str):
     return await _stream_tts(input)
+
+@router.get("/extract-text")
+async def extract_text_from_url(url: str):
+    """Fetch a URL and return the extracted article text, cleaned for TTS."""
+    from bs4 import BeautifulSoup
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+
+            soup = BeautifulSoup(resp.content, 'html.parser')
+
+            for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form", "button", "iframe"]):
+                tag.decompose()
+
+            article = soup.find('article') or soup.find('main') or soup.find('body')
+            text = article.get_text(separator="\n") if article else soup.get_text(separator="\n")
+
+            lines = (line.strip() for line in text.splitlines())
+            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+            text = '\n'.join(chunk for chunk in chunks if chunk)
+
+            if not text.strip():
+                raise HTTPException(status_code=400, detail="No text could be extracted from the URL.")
+
+            title_tag = soup.find('title')
+            title = title_tag.get_text().strip() if title_tag else ""
+
+            return {"title": title, "text": text}
+
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=f"Failed to fetch URL: {e}")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Could not reach URL: {str(e)}")
