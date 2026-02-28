@@ -88,6 +88,7 @@ export const useStore = create((set, get) => ({
             grow: true,
             theWay: true,
             call: false,
+            tts_reader: false,
             terminal: false
         },
     },
@@ -956,7 +957,8 @@ export const useStore = create((set, get) => ({
                             hot_topics: true,
                             connectors: true,
                             grow: true,
-                            theWay: true
+                            theWay: true,
+                            tts_reader: false
                         },
                     }
                 });

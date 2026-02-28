@@ -16,6 +16,7 @@ import GraphChat from './components/GraphChat';
 import SkillsArea from './components/SkillsArea';
 import CallArea from './components/CallArea';
 import TerminalArea from './components/TerminalArea';
+import TTSReaderArea from './components/TTSReaderArea';
 import { ThemeProvider, applyThemeToDOM } from './components/ThemeProvider';
 
 function App() {
@@ -397,6 +398,11 @@ function App() {
                         {/* CALL VIEW */}
                         <div className={`absolute inset-0 z-10 ${activeView === 'call' ? 'block' : 'hidden'}`}>
                             <CallArea />
+                        </div>
+
+                        {/* TTS READER VIEW */}
+                        <div className={`absolute inset-0 z-10 ${activeView === 'tts_reader' ? 'block' : 'hidden'}`}>
+                            <TTSReaderArea />
                         </div>
 
                         {/* TERMINAL VIEW */}

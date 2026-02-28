@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+venv
+.venv
+**/.venv
+**/lib64
+.git
+.DS_Store
+memory_data
+logs
