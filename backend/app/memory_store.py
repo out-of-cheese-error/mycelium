@@ -15,19 +15,39 @@ MEMORY_BASE_DIR = os.environ.get("MEMORY_BASE_DIR", "./memory_data")
 _workspace_locks = {}
 _locks_lock = threading.Lock()  # Lock for accessing _workspace_locks
 
+# Singleton instances per workspace to prevent lost-update race conditions.
+# Without this, concurrent ingestion jobs each create their own GraphMemory,
+# load the same snapshot, and the last writer silently overwrites all others.
+_workspace_instances = {}
+
 class GraphMemory:
+    def __new__(cls, workspace_id: str = "default", base_dir: str = "./memory_data"):
+        """Return the cached singleton for this workspace, creating it if needed."""
+        with _locks_lock:
+            if workspace_id in _workspace_instances:
+                return _workspace_instances[workspace_id]
+            instance = super().__new__(cls)
+            instance._initialized = False
+            _workspace_instances[workspace_id] = instance
+            return instance
+
     def __init__(self, workspace_id: str = "default", base_dir: str = "./memory_data"):
+        # Skip re-init if this singleton was already set up
+        if self._initialized:
+            return
+        self._initialized = True
+
         self.workspace_id = workspace_id
         self.base_dir = base_dir
         self.workspace_dir = os.path.join(base_dir, workspace_id)
         os.makedirs(self.workspace_dir, exist_ok=True)
-        
+
         # Get or create lock for this workspace
         with _locks_lock:
             if workspace_id not in _workspace_locks:
-                _workspace_locks[workspace_id] = threading.Lock()
+                _workspace_locks[workspace_id] = threading.RLock()
             self._graph_lock = _workspace_locks[workspace_id]
-        
+
         # 1. Initialize Graph
         self.graph_path = os.path.join(self.workspace_dir, "graph.json")
         self.graph = nx.Graph()
@@ -89,21 +109,25 @@ class GraphMemory:
     
     # ... rest of methods assume self.graph is correct ...
 
+    def _save_graph_unlocked(self):
+        """Saves graph to disk. Caller MUST already hold self._graph_lock."""
+        data = nx.node_link_data(self.graph)
+        tmp_path = self.graph_path + ".tmp"
+        try:
+            with open(tmp_path, 'w') as f:
+                json.dump(data, f)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, self.graph_path)
+        except Exception as e:
+            print(f"Error saving graph: {e}")
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
     def save_graph(self):
-        """Saves graph to disk with file locking to prevent corruption from concurrent writes."""
+        """Saves graph to disk with locking to prevent corruption from concurrent writes."""
         with self._graph_lock:
-            data = nx.node_link_data(self.graph)
-            tmp_path = self.graph_path + ".tmp"
-            try:
-                with open(tmp_path, 'w') as f:
-                    json.dump(data, f)
-                    f.flush()
-                    os.fsync(f.fileno())
-                os.replace(tmp_path, self.graph_path)
-            except Exception as e:
-                print(f"Error saving graph: {e}")
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
+            self._save_graph_unlocked()
             
     # --- Note Embedding Methods ---
     def index_note(self, note_id: str, title: str, content: str):
@@ -345,93 +369,102 @@ class GraphMemory:
     def add_entity(self, name: str, type: str, description: str):
         """Adds or updates an entity in the graph and vector store."""
         from datetime import date
-        
-        # Add to Graph
-        if not self.graph.has_node(name):
-            self.graph.add_node(name, type=type, description=description, created_at=date.today().isoformat())
-        else:
-            # Update description (simple append for now, could be smarter)
-            old_desc = self.graph.nodes[name].get('description', '')
-            if description not in old_desc:
-                self.graph.nodes[name]['description'] = old_desc + "; " + description
-        
-        # Add to Vector Store (Embedding the description + name for context)
+
+        # Compute embedding outside the lock (slow I/O, safe to do concurrently)
         text_representation = f"{name} ({type}): {description}"
         embedding = self.embedding_fn.embed_query(text_representation)
-        
-        self.collection.upsert(
-            ids=[name], # ID is the entity name for uniqueness
-            embeddings=[embedding],
-            documents=[text_representation],
-            metadatas=[{"name": name, "type": type}]
-        )
-        self.save_graph()
+
+        with self._graph_lock:
+            # Add to Graph
+            if not self.graph.has_node(name):
+                self.graph.add_node(name, type=type, description=description, created_at=date.today().isoformat())
+            else:
+                # Update description (simple append for now, could be smarter)
+                old_desc = self.graph.nodes[name].get('description', '')
+                if description not in old_desc:
+                    self.graph.nodes[name]['description'] = old_desc + "; " + description
+
+            # Add to Vector Store
+            self.collection.upsert(
+                ids=[name],
+                embeddings=[embedding],
+                documents=[text_representation],
+                metadatas=[{"name": name, "type": type}]
+            )
+            self._save_graph_unlocked()
 
     def update_entity(self, name: str, type: str = None, description: str = None):
         """Updates an existing entity's properties (overwrite)."""
-        if not self.graph.has_node(name):
-            return False
-            
-        if type:
-            self.graph.nodes[name]['type'] = type
-        if description:
-            self.graph.nodes[name]['description'] = description
-            
-        # Re-embed
-        node_data = self.graph.nodes[name]
-        current_type = node_data.get('type', 'Unknown')
-        current_desc = node_data.get('description', '')
-        
+        with self._graph_lock:
+            if not self.graph.has_node(name):
+                return False
+
+            if type:
+                self.graph.nodes[name]['type'] = type
+            if description:
+                self.graph.nodes[name]['description'] = description
+
+            # Re-embed
+            node_data = self.graph.nodes[name]
+            current_type = node_data.get('type', 'Unknown')
+            current_desc = node_data.get('description', '')
+
+        # Embedding outside lock (slow I/O)
         text_representation = f"{name} ({current_type}): {current_desc}"
         embedding = self.embedding_fn.embed_query(text_representation)
-        
-        self.collection.upsert(
-            ids=[name],
-            embeddings=[embedding],
-            documents=[text_representation],
-            metadatas=[{"name": name, "type": current_type}]
-        )
-        self.save_graph()
+
+        with self._graph_lock:
+            self.collection.upsert(
+                ids=[name],
+                embeddings=[embedding],
+                documents=[text_representation],
+                metadatas=[{"name": name, "type": current_type}]
+            )
+            self._save_graph_unlocked()
         return True
 
     def add_relation(self, source: str, target: str, relation: str):
         """Adds a relationship between two entities."""
-        # Ensure nodes exist
+        # Ensure nodes exist (add_entity acquires lock internally via RLock)
         if not self.graph.has_node(source):
             self.add_entity(source, "Unknown", "Inferred entity")
         if not self.graph.has_node(target):
             self.add_entity(target, "Unknown", "Inferred entity")
-            
-        self.graph.add_edge(source, target, relation=relation)
-        self.save_graph()
+
+        with self._graph_lock:
+            self.graph.add_edge(source, target, relation=relation)
+            self._save_graph_unlocked()
 
     def update_relation(self, source: str, target: str, new_relation: str):
         """Updates an existing relationship (edge)."""
-        if not self.graph.has_edge(source, target):
-            return False
-            
-        self.graph[source][target]['relation'] = new_relation
-        self.save_graph()
+        with self._graph_lock:
+            if not self.graph.has_edge(source, target):
+                return False
+
+            self.graph[source][target]['relation'] = new_relation
+            self._save_graph_unlocked()
         return True
 
     def delete_entity(self, name: str):
         """Deletes an entity from the graph and vector store."""
-        # 1. Remove from Graph
-        if self.graph.has_node(name):
-            self.graph.remove_node(name)
-            self.save_graph()
-            
-        # 2. Remove from Vector Store
-        try:
-            self.collection.delete(ids=[name])
-        except Exception as e:
-            print(f"Warning: Failed to delete embedding for {name}: {e}")
+        with self._graph_lock:
+            # 1. Remove from Graph
+            if self.graph.has_node(name):
+                self.graph.remove_node(name)
+                self._save_graph_unlocked()
+
+            # 2. Remove from Vector Store
+            try:
+                self.collection.delete(ids=[name])
+            except Exception as e:
+                print(f"Warning: Failed to delete embedding for {name}: {e}")
 
     def delete_relation(self, source: str, target: str):
         """Deletes a relationship between two entities."""
-        if self.graph.has_edge(source, target):
-            self.graph.remove_edge(source, target)
-            self.save_graph()
+        with self._graph_lock:
+            if self.graph.has_edge(source, target):
+                self.graph.remove_edge(source, target)
+                self._save_graph_unlocked()
 
     def retrieve_context(self, query: str, k: int = 3, depth: int = 1, include_descriptions: bool = False) -> str:
         """Retrieves relevant subgraph context based on vector similarity and traversal depth."""
@@ -611,13 +644,14 @@ class GraphMemory:
         return nx.node_link_data(self.graph)
 
     def clear(self):
-        self.graph.clear()
-        self.save_graph()
-        self.chroma_client.delete_collection("entity_embeddings")
-        self.collection = self.chroma_client.get_or_create_collection(
-            name="entity_embeddings",
-            metadata={"hnsw:space": "cosine"}
-        )
+        with self._graph_lock:
+            self.graph.clear()
+            self._save_graph_unlocked()
+            self.chroma_client.delete_collection("entity_embeddings")
+            self.collection = self.chroma_client.get_or_create_collection(
+                name="entity_embeddings",
+                metadata={"hnsw:space": "cosine"}
+            )
 
     def get_stats(self):
         return {
@@ -673,61 +707,52 @@ class GraphMemory:
         """
         print(f"Re-indexing graph for workspace {self.workspace_id}...")
 
-        # 1. Drop and recreate collection to ensure clean state (handles index corruption)
-        try:
-            self.chroma_client.delete_collection("entity_embeddings")
-        except Exception as e:
-            print(f"Error deleting collection (might not exist): {e}")
-        self.collection = self.chroma_client.get_or_create_collection(
-            name="entity_embeddings",
-            metadata={"hnsw:space": "cosine"}
-        )
-
-        # 2. Re-embed all nodes
-        nodes_to_add = []
-        ids = []
-        embeddings = []
-        metadatas = []
-        documents = []
-        
-        # Batch preparation
-        # We'll do it in one go for small graphs, or chunk it?
-        # Graph size < 2000 nodes usually. One go is fine?
-        # Chroma handles batching internally mostly, but let's be safe.
-        
-        nodes = list(self.graph.nodes(data=True))
-        print(f"Found {len(nodes)} nodes to index.")
-        
-        if not nodes:
-            return
-
-        for name, data in nodes:
-            desc = data.get('description', '')
-            type_ = data.get('type', 'Unknown')
-            
-            text_representation = f"{name} ({type_}): {desc}"
-            # We defer embedding to the batch call? 
-            # `embedding_fn.embed_documents` takes a list.
-            
-            ids.append(name)
-            documents.append(text_representation)
-            metadatas.append({"name": name, "type": type_})
-        
-        # Generate Embeddings in batch (faster)
-        try:
-            embeddings = self.embedding_fn.embed_documents(documents)
-            
-            # Upsert
-            # Chroma max batch size is usually ~5000+. 
-            self.collection.upsert(
-                ids=ids,
-                embeddings=embeddings,
-                documents=documents,
-                metadatas=metadatas
+        with self._graph_lock:
+            # 1. Drop and recreate collection to ensure clean state (handles index corruption)
+            try:
+                self.chroma_client.delete_collection("entity_embeddings")
+            except Exception as e:
+                print(f"Error deleting collection (might not exist): {e}")
+            self.collection = self.chroma_client.get_or_create_collection(
+                name="entity_embeddings",
+                metadata={"hnsw:space": "cosine"}
             )
-            print("Re-indexing complete.")
-        except Exception as e:
-            print(f"Failed to re-index: {e}")
+
+            # 2. Re-embed all nodes
+            nodes_to_add = []
+            ids = []
+            embeddings = []
+            metadatas = []
+            documents = []
+
+            nodes = list(self.graph.nodes(data=True))
+            print(f"Found {len(nodes)} nodes to index.")
+
+            if not nodes:
+                return
+
+            for name, data in nodes:
+                desc = data.get('description', '')
+                type_ = data.get('type', 'Unknown')
+
+                text_representation = f"{name} ({type_}): {desc}"
+                ids.append(name)
+                documents.append(text_representation)
+                metadatas.append({"name": name, "type": type_})
+
+            # Generate Embeddings in batch (faster)
+            try:
+                embeddings = self.embedding_fn.embed_documents(documents)
+
+                self.collection.upsert(
+                    ids=ids,
+                    embeddings=embeddings,
+                    documents=documents,
+                    metadatas=metadatas
+                )
+                print("Re-indexing complete.")
+            except Exception as e:
+                print(f"Failed to re-index: {e}")
 
     def get_node_neighbors(self, node_id: str) -> dict:
         """
@@ -952,77 +977,83 @@ class GraphMemory:
         - Transfers all edges from duplicates to canonical
         - Optionally merges descriptions
         - Removes duplicate nodes from graph and vector store
-        
+
         Returns: dict with keys 'edges_transferred', 'nodes_removed'
         """
-        if not self.graph.has_node(canonical_id):
-            return {"edges_transferred": 0, "nodes_removed": 0, "error": f"Canonical node '{canonical_id}' not found"}
-        
-        edges_transferred = 0
-        nodes_removed = 0
-        
-        canonical_data = self.graph.nodes[canonical_id]
-        merged_descriptions = [canonical_data.get("description", "")]
-        
-        for dup_id in duplicate_ids:
-            if dup_id == canonical_id:
-                continue
-            if not self.graph.has_node(dup_id):
-                continue
-            
-            dup_data = self.graph.nodes[dup_id]
-            
-            # Collect description for merging
-            dup_desc = dup_data.get("description", "")
-            if dup_desc and dup_desc not in merged_descriptions:
-                merged_descriptions.append(dup_desc)
-            
-            # Transfer all edges from duplicate to canonical
-            for neighbor in list(self.graph.neighbors(dup_id)):
-                if neighbor == canonical_id:
-                    continue  # Skip self-loops
-                
-                edge_data = self.graph.get_edge_data(dup_id, neighbor)
-                relation = edge_data.get('relation', 'related') if edge_data else 'related'
-                
-                # Add edge to canonical if it doesn't exist
-                if not self.graph.has_edge(canonical_id, neighbor):
-                    self.graph.add_edge(canonical_id, neighbor, relation=relation)
-                    edges_transferred += 1
-            
-            # Remove duplicate node
-            self.graph.remove_node(dup_id)
-            nodes_removed += 1
-            
-            # Remove from vector store
-            try:
-                self.collection.delete(ids=[dup_id])
-            except Exception as e:
-                print(f"Warning: Failed to delete embedding for {dup_id}: {e}")
-        
-        # Merge descriptions
-        if merge_descriptions and len(merged_descriptions) > 1:
-            merged_desc = "; ".join([d for d in merged_descriptions if d])
-            self.graph.nodes[canonical_id]["description"] = merged_desc
-            
-            # Re-embed canonical node with updated description
-            # Truncate for embedding to avoid context length errors
-            node_type = canonical_data.get("type", "Unknown")
-            truncated_desc = merged_desc[:2000] if len(merged_desc) > 2000 else merged_desc
-            text_representation = f"{canonical_id} ({node_type}): {truncated_desc}"
+        with self._graph_lock:
+            if not self.graph.has_node(canonical_id):
+                return {"edges_transferred": 0, "nodes_removed": 0, "error": f"Canonical node '{canonical_id}' not found"}
+
+            edges_transferred = 0
+            nodes_removed = 0
+
+            canonical_data = self.graph.nodes[canonical_id]
+            merged_descriptions = [canonical_data.get("description", "")]
+
+            for dup_id in duplicate_ids:
+                if dup_id == canonical_id:
+                    continue
+                if not self.graph.has_node(dup_id):
+                    continue
+
+                dup_data = self.graph.nodes[dup_id]
+
+                # Collect description for merging
+                dup_desc = dup_data.get("description", "")
+                if dup_desc and dup_desc not in merged_descriptions:
+                    merged_descriptions.append(dup_desc)
+
+                # Transfer all edges from duplicate to canonical
+                for neighbor in list(self.graph.neighbors(dup_id)):
+                    if neighbor == canonical_id:
+                        continue  # Skip self-loops
+
+                    edge_data = self.graph.get_edge_data(dup_id, neighbor)
+                    relation = edge_data.get('relation', 'related') if edge_data else 'related'
+
+                    # Add edge to canonical if it doesn't exist
+                    if not self.graph.has_edge(canonical_id, neighbor):
+                        self.graph.add_edge(canonical_id, neighbor, relation=relation)
+                        edges_transferred += 1
+
+                # Remove duplicate node
+                self.graph.remove_node(dup_id)
+                nodes_removed += 1
+
+                # Remove from vector store
+                try:
+                    self.collection.delete(ids=[dup_id])
+                except Exception as e:
+                    print(f"Warning: Failed to delete embedding for {dup_id}: {e}")
+
+            # Merge descriptions
+            need_reembed = False
+            text_representation = None
+            node_type = None
+            if merge_descriptions and len(merged_descriptions) > 1:
+                merged_desc = "; ".join([d for d in merged_descriptions if d])
+                self.graph.nodes[canonical_id]["description"] = merged_desc
+                node_type = canonical_data.get("type", "Unknown")
+                truncated_desc = merged_desc[:2000] if len(merged_desc) > 2000 else merged_desc
+                text_representation = f"{canonical_id} ({node_type}): {truncated_desc}"
+                need_reembed = True
+
+            self._save_graph_unlocked()
+
+        # Re-embed outside lock (slow I/O)
+        if need_reembed:
             try:
                 embedding = self.embedding_fn.embed_query(text_representation)
-                self.collection.upsert(
-                    ids=[canonical_id],
-                    embeddings=[embedding],
-                    documents=[text_representation],
-                    metadatas=[{"name": canonical_id, "type": node_type}]
-                )
+                with self._graph_lock:
+                    self.collection.upsert(
+                        ids=[canonical_id],
+                        embeddings=[embedding],
+                        documents=[text_representation],
+                        metadatas=[{"name": canonical_id, "type": node_type}]
+                    )
             except Exception as e:
                 print(f"Warning: Failed to re-embed {canonical_id}: {e}")
-        
-        self.save_graph()
-        
+
         return {
             "edges_transferred": edges_transferred,
             "nodes_removed": nodes_removed,
