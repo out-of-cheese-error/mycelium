@@ -6,7 +6,7 @@ import {
     Save, Edit2, Plus, Trash2, FileText, Bold, Italic, List, ListOrdered,
     Heading1, Heading2, Heading3, Code, Link, Table, Quote, Strikethrough,
     Minus, CheckSquare, Eye, EyeOff, X, Check, Loader2,
-    Undo2, Redo2, Columns, Square
+    Undo2, Redo2, Columns, Square, Dna, Settings2, ChevronDown, PenLine
 } from 'lucide-react';
 
 // Toast notification component
@@ -131,7 +131,12 @@ const NotesArea = () => {
         createNote,
         updateNote,
         deleteNote,
-        selectNote
+        selectNote,
+        evolveArticle,
+        generateArticle,
+        articleGenerating,
+        articleEvolving,
+        articleProgress
     } = useStore();
 
     const [editContent, setEditContent] = useState("");
@@ -151,6 +156,17 @@ const NotesArea = () => {
     const [historyIndex, setHistoryIndex] = useState(-1);
     const isUndoRedoAction = useRef(false);
     const historyTimeoutRef = useRef(null);
+
+    // Article generation
+    const [showArticlePrompt, setShowArticlePrompt] = useState(false);
+    const [articleTopic, setArticleTopic] = useState('');
+
+    // Evolve settings
+    const [showEvolveSettings, setShowEvolveSettings] = useState(false);
+    const [evolveMaxGen, setEvolveMaxGen] = useState(3);
+    const [evolveThreshold, setEvolveThreshold] = useState(8.5);
+    const [evolveStagnation, setEvolveStagnation] = useState(2);
+    const [evolvePersona, setEvolvePersona] = useState('');
 
     // Initial Fetch
     useEffect(() => {
@@ -428,7 +444,7 @@ const NotesArea = () => {
                     {activeNote ? (
                         <>
                             {/* Header */}
-                            <div className="p-3 border-b border-gray-800 flex justify-between items-center bg-gray-900/80 backdrop-blur-sm">
+                            <div className="p-3 border-b border-gray-800 flex justify-between items-center bg-gray-900/80 backdrop-blur-sm relative z-30">
                                 <div className="flex items-center gap-3 flex-1 min-w-0">
                                     <input
                                         className="bg-transparent text-xl font-bold text-white focus:outline-none 
@@ -457,11 +473,81 @@ const NotesArea = () => {
                                             {fullPreview ? <Columns size={16} /> : <Square size={16} />}
                                         </button>
                                     )}
+                                    {activeNote?.type === 'article' && (
+                                        <div className="relative flex items-center">
+                                            <button
+                                                onClick={() => {
+                                                    setShowEvolveSettings(false);
+                                                    evolveArticle(activeNote.id, {
+                                                        max_generations: evolveMaxGen,
+                                                        convergence_threshold: evolveThreshold,
+                                                        stagnation_limit: evolveStagnation,
+                                                        evaluator_persona: evolvePersona.trim() || null
+                                                    });
+                                                }}
+                                                disabled={articleEvolving}
+                                                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700
+                                                         disabled:text-gray-500 text-white rounded-l-lg transition-colors
+                                                         flex items-center gap-2"
+                                                title="Evolve this article using genetic optimization"
+                                            >
+                                                {articleEvolving
+                                                    ? <Loader2 size={14} className="animate-spin" />
+                                                    : <Dna size={14} />}
+                                                <span className="text-sm">{articleEvolving ? 'Evolving...' : 'Evolve'}</span>
+                                            </button>
+                                            <button
+                                                onClick={() => setShowEvolveSettings(!showEvolveSettings)}
+                                                disabled={articleEvolving}
+                                                className="px-1.5 py-1.5 bg-purple-700 hover:bg-purple-600 disabled:bg-gray-700
+                                                         disabled:text-gray-500 text-white rounded-r-lg transition-colors
+                                                         border-l border-purple-500/30"
+                                                title="Evolution settings"
+                                            >
+                                                <ChevronDown size={14} className={`transition-transform ${showEvolveSettings ? 'rotate-180' : ''}`} />
+                                            </button>
+                                            {showEvolveSettings && (
+                                                <div className="absolute top-full right-0 mt-1 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-20 p-3 space-y-3">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-xs font-semibold text-purple-300 uppercase tracking-wider">Evolution Settings</span>
+                                                        <button onClick={() => setShowEvolveSettings(false)} className="text-gray-500 hover:text-white">
+                                                            <X size={12} />
+                                                        </button>
+                                                    </div>
+                                                    <label className="block">
+                                                        <span className="text-xs text-gray-400">Max Generations</span>
+                                                        <input type="number" min={1} max={10} value={evolveMaxGen}
+                                                            onChange={e => setEvolveMaxGen(parseInt(e.target.value) || 1)}
+                                                            className="mt-0.5 w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500" />
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-xs text-gray-400">Convergence Threshold (0-10)</span>
+                                                        <input type="number" min={0} max={10} step={0.5} value={evolveThreshold}
+                                                            onChange={e => setEvolveThreshold(parseFloat(e.target.value) || 0)}
+                                                            className="mt-0.5 w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500" />
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-xs text-gray-400">Stagnation Limit</span>
+                                                        <input type="number" min={1} max={10} value={evolveStagnation}
+                                                            onChange={e => setEvolveStagnation(parseInt(e.target.value) || 1)}
+                                                            className="mt-0.5 w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500" />
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-xs text-gray-400">Evaluator Persona</span>
+                                                        <input type="text" value={evolvePersona}
+                                                            onChange={e => setEvolvePersona(e.target.value)}
+                                                            placeholder="e.g. scientific, literary, pedagogical..."
+                                                            className="mt-0.5 w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500" />
+                                                    </label>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                     <button
                                         onClick={handleSave}
                                         disabled={saveStatus === 'saved'}
-                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 
-                                                 disabled:text-gray-500 text-white rounded-lg transition-colors 
+                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700
+                                                 disabled:text-gray-500 text-white rounded-lg transition-colors
                                                  flex items-center gap-2"
                                     >
                                         <Save size={14} />
@@ -479,6 +565,31 @@ const NotesArea = () => {
                                 canRedo={canRedo}
                                 disabled={false}
                             />
+
+                            {/* Article Progress Panel (generation or evolution) */}
+                            {(articleEvolving || articleGenerating) && articleProgress.length > 0 && (
+                                <div className="px-4 py-3 bg-purple-900/20 border-b border-purple-800/30 max-h-32 overflow-y-auto">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        {articleEvolving
+                                            ? <Dna size={14} className="text-purple-400 animate-pulse" />
+                                            : <PenLine size={14} className="text-purple-400 animate-pulse" />}
+                                        <span className="text-xs font-semibold text-purple-300 uppercase tracking-wider">
+                                            {articleEvolving ? 'Evolution Progress' : 'Article Generation'}
+                                        </span>
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        {articleProgress.map((p, i) => (
+                                            <div key={i} className={`text-xs ${
+                                                p.status === 'error' ? 'text-red-400' :
+                                                p.status === 'complete' || p.status === 'converged' ? 'text-green-400' :
+                                                'text-gray-400'
+                                            }`}>
+                                                {p.message}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Editor + Preview Split */}
                             <div className="flex-1 flex overflow-hidden">
@@ -601,14 +712,73 @@ const NotesArea = () => {
                 <div className="w-64 bg-gray-900 border-l border-gray-800 flex flex-col">
                     <div className="p-4 border-b border-gray-800 flex justify-between items-center">
                         <span className="font-semibold text-gray-400 text-sm">NOTES</span>
-                        <button
-                            onClick={handleCreate}
-                            className="p-1.5 hover:bg-gray-800 rounded-lg text-blue-400 transition-colors"
-                            title="Create Note"
-                        >
-                            <Plus size={18} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => setShowArticlePrompt(!showArticlePrompt)}
+                                disabled={articleGenerating}
+                                className="p-1.5 hover:bg-gray-800 rounded-lg text-purple-400 transition-colors disabled:text-gray-600"
+                                title="Write Article"
+                            >
+                                {articleGenerating ? <Loader2 size={18} className="animate-spin" /> : <PenLine size={18} />}
+                            </button>
+                            <button
+                                onClick={handleCreate}
+                                className="p-1.5 hover:bg-gray-800 rounded-lg text-blue-400 transition-colors"
+                                title="Create Note"
+                            >
+                                <Plus size={18} />
+                            </button>
+                        </div>
                     </div>
+
+                    {/* Article Topic Input */}
+                    {showArticlePrompt && (
+                        <div className="p-3 border-b border-gray-800 bg-purple-900/10">
+                            <label className="block mb-1.5">
+                                <span className="text-xs text-purple-300 font-semibold uppercase tracking-wider">Article Topic</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={articleTopic}
+                                onChange={e => setArticleTopic(e.target.value)}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' && articleTopic.trim()) {
+                                        setShowArticlePrompt(false);
+                                        generateArticle(articleTopic.trim());
+                                        setArticleTopic('');
+                                    } else if (e.key === 'Escape') {
+                                        setShowArticlePrompt(false);
+                                    }
+                                }}
+                                placeholder="e.g. Sumerian agriculture"
+                                autoFocus
+                                className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white
+                                         focus:outline-none focus:border-purple-500 placeholder-gray-600"
+                            />
+                            <div className="flex gap-2 mt-2">
+                                <button
+                                    onClick={() => {
+                                        if (articleTopic.trim()) {
+                                            setShowArticlePrompt(false);
+                                            generateArticle(articleTopic.trim());
+                                            setArticleTopic('');
+                                        }
+                                    }}
+                                    disabled={!articleTopic.trim()}
+                                    className="flex-1 px-2 py-1 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700
+                                             disabled:text-gray-500 text-white text-xs rounded transition-colors"
+                                >
+                                    Generate
+                                </button>
+                                <button
+                                    onClick={() => setShowArticlePrompt(false)}
+                                    className="px-2 py-1 text-gray-400 hover:text-white text-xs rounded hover:bg-gray-800 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex-1 overflow-y-auto">
                         {notesList.length === 0 ? (
@@ -627,8 +797,11 @@ const NotesArea = () => {
                                             ? 'bg-gray-800 border-l-2 border-l-blue-500'
                                             : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'}`}
                                 >
-                                    <div className="font-medium text-gray-300 text-sm truncate pr-6">
+                                    <div className="font-medium text-gray-300 text-sm truncate pr-6 flex items-center gap-1.5">
                                         {note.title || "Untitled"}
+                                        {note.type === 'article' && (
+                                            <Dna size={12} className="text-purple-400 flex-shrink-0" title="Article (evolvable)" />
+                                        )}
                                     </div>
                                     <div className="text-xs text-gray-500 mt-1">
                                         {new Date((note.updated_at || 0) * 1000).toLocaleDateString()}

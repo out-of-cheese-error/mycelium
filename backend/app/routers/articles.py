@@ -35,3 +35,30 @@ async def generate_article(request: GenerateArticleRequest):
             yield json.dumps(update) + "\n"
 
     return StreamingResponse(generator(), media_type="application/x-ndjson")
+
+
+class EvolveArticleRequest(BaseModel):
+    workspace_id: str
+    note_id: str
+    max_generations: int = 3
+    convergence_threshold: float = 8.5
+    stagnation_limit: int = 2
+    evaluator_persona: Optional[str] = None
+
+
+@router.post("/evolve")
+async def evolve_article(request: EvolveArticleRequest):
+    """Evolve an existing article note using genetic algorithm optimization. Streams progress as NDJSON."""
+    service = ArticleService(request.workspace_id)
+
+    async def generator():
+        async for update in service.evolve_article_stream(
+            note_id=request.note_id,
+            max_generations=request.max_generations,
+            convergence_threshold=request.convergence_threshold,
+            stagnation_limit=request.stagnation_limit,
+            evaluator_persona=request.evaluator_persona
+        ):
+            yield json.dumps(update) + "\n"
+
+    return StreamingResponse(generator(), media_type="application/x-ndjson")

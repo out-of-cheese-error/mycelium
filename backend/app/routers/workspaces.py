@@ -435,6 +435,7 @@ class Note(BaseModel):
     title: str
     content: str
     updated_at: float
+    type: Optional[str] = None
 
 class CreateNoteRequest(BaseModel):
     title: str

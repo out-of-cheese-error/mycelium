@@ -805,6 +805,109 @@ export const useStore = create((set, get) => ({
         }
     },
 
+    // --- Article Generation & Evolution ---
+    articleGenerating: false,
+    articleEvolving: false,
+    articleProgress: [], // array of {stage, status, message, ...}
+
+    generateArticle: async (topic, opts = {}) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+        set({ articleGenerating: true, articleProgress: [] });
+        try {
+            const response = await fetch(`${API_base}/articles/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    workspace_id: ws.id,
+                    topic,
+                    mode: opts.mode || 'existing',
+                    research_sources: opts.research_sources || null
+                })
+            });
+            if (!response.body) throw new Error("No response body");
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let result = null;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        const update = JSON.parse(line);
+                        set(state => ({ articleProgress: [...state.articleProgress, update] }));
+                        if (update.stage === 'complete') result = update;
+                    } catch (e) { /* skip malformed lines */ }
+                }
+            }
+            if (result?.note_id) {
+                await get().fetchNotesList(ws.id);
+                await get().selectNote({ id: result.note_id });
+            }
+            return result;
+        } catch (e) {
+            console.error("Generate article failed", e);
+            set(state => ({ articleProgress: [...state.articleProgress, { stage: 'error', status: 'error', message: e.message }] }));
+        } finally {
+            set({ articleGenerating: false });
+        }
+    },
+
+    evolveArticle: async (noteId, opts = {}) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+        set({ articleEvolving: true, articleProgress: [] });
+        try {
+            const response = await fetch(`${API_base}/articles/evolve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    workspace_id: ws.id,
+                    note_id: noteId,
+                    max_generations: opts.max_generations || 3,
+                    convergence_threshold: opts.convergence_threshold || 8.5,
+                    stagnation_limit: opts.stagnation_limit || 2,
+                    evaluator_persona: opts.evaluator_persona || null
+                })
+            });
+            if (!response.body) throw new Error("No response body");
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let result = null;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        const update = JSON.parse(line);
+                        set(state => ({ articleProgress: [...state.articleProgress, update] }));
+                        if (update.stage === 'complete') result = update;
+                    } catch (e) { /* skip malformed lines */ }
+                }
+            }
+            if (result?.note_id) {
+                await get().fetchNotesList(ws.id);
+                await get().selectNote({ id: result.note_id });
+            }
+            return result;
+        } catch (e) {
+            console.error("Evolve article failed", e);
+            set(state => ({ articleProgress: [...state.articleProgress, { stage: 'error', status: 'error', message: e.message }] }));
+        } finally {
+            set({ articleEvolving: false });
+        }
+    },
+
     // --- Skills (theWay) ---
     skillsList: [],
     activeSkill: null, // { id, title, summary, explanation, updated_at }
