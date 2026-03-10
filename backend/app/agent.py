@@ -300,6 +300,25 @@ async def generate_lesson(topic: str, workspace_id: str = "default"):
         return f"Failed to generate lesson: {e}"
 
 @tool
+async def generate_article(topic: str, research: bool = False, workspace_id: str = "default"):
+    """
+    Generates a long-form, well-structured article about the topic using knowledge graph clusters.
+    Uses a ConvergeWriter-style bottom-up pipeline: clusters knowledge, creates outline, writes section-by-section.
+    The article is saved as a note in the Notes tab.
+    If research=True, first searches and ingests new sources before writing.
+    """
+    try:
+        from app.services.article_service import ArticleService
+        service = ArticleService(workspace_id)
+        mode = "research" if research else "existing"
+        result = await service.generate_article(topic, mode=mode)
+        if result:
+            return f"Article '{result.get('title', topic)}' generated and saved as a note (ID: {result.get('note_id', 'unknown')}). Find it in the Notes tab."
+        return "Article generation failed — no relevant knowledge clusters found. Try ingesting some sources on this topic first."
+    except Exception as e:
+        return f"Failed to generate article: {e}"
+
+@tool
 def search_reddit(query: str, workspace_id: str = "default"):
     """
     Searches Reddit for discussions and comments about a topic.
@@ -1129,7 +1148,7 @@ def execute_terminal_command(command: str, workspace_id: str = "default"):
 
 tools = [
     DuckDuckGoSearchRun(), create_note, read_note, update_note, list_notes, delete_note, search_notes,
-    visit_page, search_images, generate_lesson, search_reddit, browse_subreddit, read_reddit_thread, 
+    visit_page, search_images, generate_lesson, generate_article, search_reddit, browse_subreddit, read_reddit_thread,
     get_reddit_user, search_concepts,
     add_graph_node, update_graph_node, add_graph_edge, update_graph_edge, search_graph_nodes, traverse_graph_node,
     search_books, get_books_by_subject, search_authors,
@@ -1454,7 +1473,7 @@ def generate_node(state: AgentState, config: RunnableConfig):
         # Science / Research
         "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
         # Utility
-        "generate_lesson",
+        "generate_lesson", "generate_article",
         # Skills (theWay)
         "lookup_skill", "create_skill",
         # Social / Streaming
@@ -1721,7 +1740,7 @@ def generate_node(state: AgentState, config: RunnableConfig):
                         "create_note", "read_note", "update_note", "list_notes", "delete_note", "search_notes",
                         "add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge", "delete_graph_node", "delete_graph_edge",
                         "search_graph_nodes", "traverse_graph_node", "search_concepts",
-                        "ingest_web_page", "ingest_gutenberg_book", "ingest_wikipedia_page", "check_ingestion_status", "generate_lesson",
+                        "ingest_web_page", "ingest_gutenberg_book", "ingest_wikipedia_page", "check_ingestion_status", "generate_lesson", "generate_article",
                         "ingest_biorxiv_article", "search_reddit", "read_note",
                         "execute_terminal_command"
                     ]:
@@ -1989,7 +2008,7 @@ async def dynamic_tool_node(state: AgentState, config: RunnableConfig):
         "search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia", 
         "ingest_wikipedia_page", "check_ingestion_status", "get_books_by_subject", "ingest_web_page",
         "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
-        "generate_lesson",
+        "generate_lesson", "generate_article",
         "lookup_skill", "create_skill",
         "read_twitch_chat",
         "execute_terminal_command"
