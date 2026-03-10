@@ -823,6 +823,68 @@ class GraphMemory:
             
         return "\n".join(lines)
 
+    def get_topic_clusters(self, topic: str, resolution: float = 1.0,
+                           min_cluster_size: int = 3, max_clusters: int = 10,
+                           min_relevance: float = 0.3):
+        """
+        Returns graph clusters filtered by relevance to a topic.
+        Each cluster is scored by the best embedding similarity of its nodes to the topic query.
+
+        Returns list of dicts: [{"nodes": [...], "score": float}, ...]
+        sorted by relevance score descending.
+        """
+        clusters = self.get_clusters(resolution=resolution)
+        topic_embedding = self.embedding_fn.embed_query(topic)
+
+        # Get a broad set of topic-relevant nodes from the vector store
+        total_nodes = self.graph.number_of_nodes()
+        try:
+            results = self.collection.query(
+                query_embeddings=[topic_embedding],
+                n_results=min(total_nodes, 200),
+                include=["distances"]
+            )
+        except Exception as e:
+            print(f"Error querying embeddings for topic clusters: {e}")
+            # Fallback: return largest clusters without scoring
+            valid = [{"nodes": list(c), "score": 0.5} for c in clusters if len(c) >= min_cluster_size]
+            valid.sort(key=lambda x: len(x["nodes"]), reverse=True)
+            return valid[:max_clusters]
+
+        # Build a node_id -> similarity map
+        node_scores = {}
+        if results['ids'] and results['ids'][0]:
+            for i, nid in enumerate(results['ids'][0]):
+                dist = results['distances'][0][i] if results['distances'] else 1.0
+                node_scores[nid] = 1.0 - (dist / 2.0)  # Convert distance to similarity
+
+        # Score each cluster by the average similarity of its top matching nodes
+        scored_clusters = []
+        for cluster in clusters:
+            node_ids = list(cluster)
+            if len(node_ids) < min_cluster_size:
+                continue
+
+            # Get similarity scores for nodes in this cluster
+            cluster_scores = [node_scores[nid] for nid in node_ids if nid in node_scores]
+
+            if cluster_scores:
+                # Use average of top-K scores (rewards clusters with concentrated relevance)
+                top_k = sorted(cluster_scores, reverse=True)[:10]
+                score = sum(top_k) / len(top_k)
+            else:
+                score = 0.0
+
+            if score >= min_relevance:
+                scored_clusters.append({
+                    "nodes": node_ids,
+                    "score": round(score, 4)
+                })
+
+        # Sort by score descending, take top N
+        scored_clusters.sort(key=lambda x: x["score"], reverse=True)
+        return scored_clusters[:max_clusters]
+
     def get_hot_topics(self, limit: int = 10):
         """
         Returns top nodes sorted by degree centrality.
