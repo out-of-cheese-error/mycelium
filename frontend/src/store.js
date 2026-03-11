@@ -647,6 +647,7 @@ export const useStore = create((set, get) => ({
                 formData.append('file', file);
                 formData.append('chunk_size', settings.chunkSize);
                 formData.append('chunk_overlap', settings.chunkOverlap);
+                formData.append('language', settings.language || 'English');
 
                 try {
                     await axios.post(`${API_base}/workspaces/${ws.id}/upload`, formData, {
