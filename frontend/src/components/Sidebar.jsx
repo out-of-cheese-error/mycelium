@@ -34,7 +34,7 @@ const Sidebar = () => {
     const [newWsName, setNewWsName] = useState('');
     const [editingWs, setEditingWs] = useState(null);
     const [showGlobalSettings, setShowGlobalSettings] = useState(false);
-    const [ingestSettings, setIngestSettings] = useState({ chunkSize: 4800, chunkOverlap: 400 });
+    const [ingestSettings, setIngestSettings] = useState({ chunkSize: 4800, chunkOverlap: 400, language: 'English' });
     const [showIngestSettings, setShowIngestSettings] = useState(false);
     const fileInputRef = useRef(null);
 
@@ -162,6 +162,16 @@ const Sidebar = () => {
                                         value={ingestSettings.chunkOverlap}
                                         onChange={e => setIngestSettings({ ...ingestSettings, chunkOverlap: parseInt(e.target.value) || 0 })}
                                         className="w-full bg-black border border-gray-700 rounded px-1.5 py-0.5 text-gray-300 focus:border-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-gray-500 block mb-0.5">Translate to language</label>
+                                    <input
+                                        type="text"
+                                        value={ingestSettings.language}
+                                        onChange={e => setIngestSettings({ ...ingestSettings, language: e.target.value })}
+                                        className="w-full bg-black border border-gray-700 rounded px-1.5 py-0.5 text-gray-300 focus:border-blue-500 focus:outline-none"
+                                        placeholder="English"
                                     />
                                 </div>
                             </div>

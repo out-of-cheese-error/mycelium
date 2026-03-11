@@ -54,7 +54,7 @@ def stop_ingestion(workspace_id: str, job_id: str):
             return True
     return False
 
-async def process_file(file_path: str, workspace_id: str, chunk_size: int = 4800, chunk_overlap: int = 400, job_id: str = None):
+async def process_file(file_path: str, workspace_id: str, chunk_size: int = 4800, chunk_overlap: int = 400, job_id: str = None, language: str = "English"):
     """Reads a file, extracting entities and relations into the graph."""
     
     if not job_id:
@@ -128,14 +128,16 @@ async def process_file(file_path: str, workspace_id: str, chunk_size: int = 4800
             text = chunk.page_content
             
             extraction_prompt = f"""Analyze the following text from a document and extract meaningful entities and relationships to build a knowledge graph.
-            
+
+IMPORTANT: The text may be in any language. You MUST translate ALL extracted entity names, types, descriptions, and relationship labels into {language} before returning them.
+
             Text: {text}
-            
+
             Return the output strictly as a JSON object with two keys: "entities" and "relations".
-            
-            1. "entities": A list of objects {{ "name": "Exact Name", "type": "Category", "description": "Brief facts" }}
-            2. "relations": A list of objects {{ "source": "Entity Name", "target": "Entity Name", "relation": "relationship label" }}
-            
+
+            1. "entities": A list of objects {{ "name": "Exact Name in {language}", "type": "Category in {language}", "description": "Brief facts in {language}" }}
+            2. "relations": A list of objects {{ "source": "Entity Name", "target": "Entity Name", "relation": "relationship label in {language}" }}
+
             JSON:
             """
             

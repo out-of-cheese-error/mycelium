@@ -270,10 +270,11 @@ async def update_workspace_emotions(workspace_id: str, emotions: EmotionState):
 
 @router.post("/{workspace_id}/upload")
 async def upload_document(
-    workspace_id: str, 
+    workspace_id: str,
     file: UploadFile = File(...),
     chunk_size: int = 4800,
-    chunk_overlap: int = 400
+    chunk_overlap: int = 400,
+    language: str = "English"
 ):
     from fastapi import Form
     # Note: When using File(...), other params must be Form(...) implicitly if simple types, 
@@ -296,7 +297,7 @@ async def upload_document(
         # Since the UI now polls for jobs, we might want to just start it?
         # But this function returns "result" (extraction count). This implies awaiting.
         # So we await it, but we also pass job_id so it shows up in the status list.
-        result = await process_file(file_path, workspace_id, chunk_size, chunk_overlap, job_id=job_id)
+        result = await process_file(file_path, workspace_id, chunk_size, chunk_overlap, job_id=job_id, language=language)
         os.remove(file_path) # Cleanup
         return result
     except Exception as e:
