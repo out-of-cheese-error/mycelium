@@ -27,14 +27,15 @@ const Sidebar = () => {
         emotions,
         updateEmotions,
         ingestJobs,
-        stopIngest
+        stopIngest,
+        uploadToLibrary
     } = useStore();
 
     const [isCreating, setIsCreating] = useState(false);
     const [newWsName, setNewWsName] = useState('');
     const [editingWs, setEditingWs] = useState(null);
     const [showGlobalSettings, setShowGlobalSettings] = useState(false);
-    const [ingestSettings, setIngestSettings] = useState({ chunkSize: 4800, chunkOverlap: 400, language: 'English' });
+    const [ingestSettings, setIngestSettings] = useState({ chunkSize: 4800, chunkOverlap: 400, language: 'English', target: 'graph' });
     const [showIngestSettings, setShowIngestSettings] = useState(false);
     const fileInputRef = useRef(null);
 
@@ -50,7 +51,16 @@ const Sidebar = () => {
 
     const handleUpload = (e) => {
         if (e.target.files && e.target.files.length > 0) {
-            uploadFiles(e.target.files, ingestSettings);
+            const files = Array.from(e.target.files);
+            const target = ingestSettings.target || 'graph';
+            if (target === 'library') {
+                uploadToLibrary(files, ingestSettings);
+            } else if (target === 'both') {
+                uploadFiles(files, ingestSettings);
+                uploadToLibrary(files, ingestSettings);
+            } else {
+                uploadFiles(files, ingestSettings);
+            }
         }
     };
 
@@ -173,6 +183,24 @@ const Sidebar = () => {
                                         className="w-full bg-black border border-gray-700 rounded px-1.5 py-0.5 text-gray-300 focus:border-blue-500 focus:outline-none"
                                         placeholder="English"
                                     />
+                                </div>
+                                <div>
+                                    <label className="text-gray-500 block mb-0.5">Ingest to</label>
+                                    <div className="flex gap-1">
+                                        {['graph', 'library', 'both'].map(t => (
+                                            <button
+                                                key={t}
+                                                onClick={() => setIngestSettings({ ...ingestSettings, target: t })}
+                                                className={`flex-1 px-1.5 py-0.5 rounded text-xs transition-colors ${
+                                                    ingestSettings.target === t
+                                                        ? t === 'library' ? 'bg-amber-600 text-white' : t === 'both' ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white'
+                                                        : 'bg-black border border-gray-700 text-gray-400 hover:text-gray-300'
+                                                }`}
+                                            >
+                                                {t.charAt(0).toUpperCase() + t.slice(1)}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         )}

@@ -147,9 +147,122 @@ def search_notes(query: str, workspace_id: str = "default"):
         return f"Search failed: {e}"
 
 @tool
+def search_library(query: str, k: int = 5, workspace_id: str = "default"):
+    """
+    Searches the document library for relevant content chunks using semantic search.
+    The library contains full document text chunks from ingested files, URLs, and papers.
+    Use this when you need detailed information that might not be in the knowledge graph.
+    The library holds much more raw content than the graph — search it for in-depth passages.
+    Returns matching text passages with source attribution and relevance scores.
+    """
+    try:
+        mem = GraphMemory(workspace_id=workspace_id, base_dir="./memory_data")
+        results = mem.search_library(query, k)
+        if not results:
+            return "No relevant documents found in the library."
+        formatted = []
+        for r in results:
+            source_info = f"Source: {r['source_name']}"
+            if r.get('page_number', -1) >= 0:
+                source_info += f", Page {r['page_number']}"
+            formatted.append(f"[{source_info}, Relevance: {r['score']:.2f}]\n{r['text']}")
+        return "\n\n---\n\n".join(formatted)
+    except Exception as e:
+        return f"Library search failed: {e}"
+
+@tool
+def promote_library_search(query: str, k: int = 5, min_score: float = 0.5, workspace_id: str = "default"):
+    """
+    Searches the document library and promotes relevant results to the knowledge graph.
+    This is the primary way to move knowledge from the library into permanent structured memory.
+
+    1. Searches the library for chunks matching the query
+    2. Filters out chunks below the min_score relevance threshold
+    3. Extracts entities and relationships from all qualifying chunks
+    4. Adds them to the knowledge graph
+
+    Use this when you find a topic worth remembering long-term from the library.
+    Adjust min_score (0.0-1.0) to be stricter or more lenient with relevance.
+    """
+    try:
+        from app.llm_config import llm_config
+        from app.utils.thinking import strip_thinking
+        mem = GraphMemory(workspace_id=workspace_id, base_dir="./memory_data")
+
+        # Load workspace-level defaults for library settings
+        try:
+            config_path = f"./memory_data/{workspace_id}/config.json"
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    ws_config = json.load(f)
+                    # Use workspace defaults if the LLM didn't override
+                    if k == 5:
+                        k = ws_config.get("library_k", 5)
+                    if min_score == 0.5:
+                        min_score = ws_config.get("library_min_score", 0.5)
+        except Exception:
+            pass
+
+        # 1. Search library
+        results = mem.search_library(query, k)
+        if not results:
+            return "No documents found in the library for this query."
+
+        # 2. Filter by relevance threshold
+        relevant = [r for r in results if r["score"] >= min_score]
+        filtered_count = len(results) - len(relevant)
+
+        if not relevant:
+            scores_str = ", ".join(f"{r['score']:.2f}" for r in results)
+            return f"Found {len(results)} chunks but none met the relevance threshold ({min_score}). Scores: [{scores_str}]. Try lowering min_score or using a different query."
+
+        # 3. Combine relevant chunks for extraction
+        combined_text = "\n\n---\n\n".join(
+            f"[Source: {r['source_name']}]\n{r['text']}" for r in relevant
+        )
+
+        extraction_prompt = f"""Analyze the following text passages and extract meaningful entities and relationships to build a knowledge graph.
+
+Text passages:
+{combined_text}
+
+Return the output strictly as a JSON object with two keys: "entities" and "relations".
+
+1. "entities": A list of objects {{ "name": "Exact Name", "type": "Category", "description": "Brief facts" }}
+2. "relations": A list of objects {{ "source": "Entity Name", "target": "Entity Name", "relation": "relationship label" }}
+
+JSON:
+"""
+        llm = llm_config.get_ingestion_llm()
+        response = llm.invoke([HumanMessage(content=extraction_prompt)])
+        content = strip_thinking(response.content)
+
+        match = re.search(r"\{.*\}", content, re.DOTALL)
+        if not match:
+            return f"Searched {len(relevant)} relevant chunks but could not extract entities from them."
+
+        data = json.loads(match.group(0))
+        entities = data.get("entities", [])
+        relations = data.get("relations", [])
+
+        for entity in entities:
+            mem.add_entity(entity["name"], entity["type"], entity["description"])
+        for rel in relations:
+            mem.add_relation(rel["source"], rel["target"], rel["relation"])
+
+        source_names = list(set(r["source_name"] for r in relevant))
+        return (
+            f"Promoted to graph: {len(entities)} entities, {len(relations)} relations "
+            f"extracted from {len(relevant)} chunks (filtered out {filtered_count} below {min_score} threshold). "
+            f"Sources: {', '.join(source_names)}"
+        )
+    except Exception as e:
+        return f"Promote library search failed: {e}"
+
+@tool
 def visit_page(url: str):
     """
-    Visits a webpage and extracts its text content. 
+    Visits a webpage and extracts its text content.
     Useful for reading documentation, articles, or other external resources.
     The content is truncated to 10000 characters to save context.
     """
@@ -752,6 +865,103 @@ async def ingest_wikipedia_page(page_title: str, workspace_id: str = "default"):
     return f"Started ingesting Wikipedia page '{page_title}' (Job ID: {job_id}). Use the dashboard to track progress."
 
 @tool
+async def add_gutenberg_book_to_library(book_id: int, workspace_id: str = "default"):
+    """
+    Downloads a book from Project Gutenberg and adds it to the document library (not the graph).
+    This is fast — it only chunks and embeds the text, no entity extraction.
+    Use this when you want to store a book for later RAG retrieval without immediately processing it into the graph.
+    You can later use promote_library_search to selectively extract relevant parts into the graph.
+    """
+    from app.services.gutendex_service import gutendex_service
+    from app.document_processor import process_file_library
+    import httpx
+    import asyncio
+
+    url = gutendex_service.get_book_text_url(book_id)
+    if not url:
+        return f"Error: Could not find a plain text download link for book ID {book_id}."
+
+    try:
+        temp_dir = os.path.join(os.getcwd(), "temp", workspace_id)
+        os.makedirs(temp_dir, exist_ok=True)
+        filename = f"gutenberg_{book_id}.txt"
+        file_path = os.path.join(temp_dir, filename)
+
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            with open(file_path, "wb") as f:
+                f.write(resp.content)
+
+    except Exception as e:
+        return f"Error downloading book: {e}"
+
+    job_id = str(uuid.uuid4())
+
+    async def _ingest_and_cleanup():
+        try:
+            await process_file_library(
+                file_path, workspace_id, chunk_size=8000, job_id=job_id,
+                source_name=f"Gutenberg #{book_id}"
+            )
+        finally:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+
+    asyncio.create_task(_ingest_and_cleanup())
+
+    return f"Started adding Book {book_id} to library (Job ID: {job_id}). Use check_ingestion_status to track progress."
+
+@tool
+async def add_wiki_article_to_library(page_title: str, workspace_id: str = "default"):
+    """
+    Downloads a Wikipedia article and adds it to the document library (not the graph).
+    This is fast — it only chunks and embeds the text, no entity extraction.
+    Use this when you want to store an article for later RAG retrieval without immediately processing it into the graph.
+    You can later use promote_library_search to selectively extract relevant parts into the graph.
+    """
+    from app.services.wikipedia_service import wikipedia_service
+    from app.document_processor import process_file_library
+    import asyncio
+
+    content = wikipedia_service.get_page_content(page_title)
+    if content.startswith("Error"):
+        return content
+
+    try:
+        temp_dir = os.path.join(os.getcwd(), "temp", workspace_id)
+        os.makedirs(temp_dir, exist_ok=True)
+        safe_title = "".join(x for x in page_title if x.isalnum() or x in " -_").strip()
+        filename = f"wiki_{safe_title}.txt"
+        file_path = os.path.join(temp_dir, filename)
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    except Exception as e:
+        return f"Error saving Wikipedia page: {e}"
+
+    job_id = str(uuid.uuid4())
+
+    async def _ingest_and_cleanup():
+        try:
+            await process_file_library(
+                file_path, workspace_id, chunk_size=4000, job_id=job_id,
+                source_name=f"Wikipedia: {page_title}"
+            )
+        finally:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+
+    asyncio.create_task(_ingest_and_cleanup())
+
+    return f"Started adding Wikipedia '{page_title}' to library (Job ID: {job_id}). Use check_ingestion_status to track progress."
+
+@tool
 def check_ingestion_status(workspace_id: str = "default"):
     """
     Checks the status of ongoing file ingestion jobs.
@@ -1148,6 +1358,7 @@ def execute_terminal_command(command: str, workspace_id: str = "default"):
 
 tools = [
     DuckDuckGoSearchRun(), create_note, read_note, update_note, list_notes, delete_note, search_notes,
+    search_library, promote_library_search,
     visit_page, search_images, generate_lesson, generate_article, search_reddit, browse_subreddit, read_reddit_thread,
     get_reddit_user, search_concepts,
     add_graph_node, update_graph_node, add_graph_edge, update_graph_edge, search_graph_nodes, traverse_graph_node,
@@ -1161,7 +1372,8 @@ tools = [
     lookup_skill, create_skill,
     read_twitch_chat, ingest_twitch_chat,
     search_youtube, read_youtube_transcript, ingest_youtube_transcript,
-    execute_terminal_command
+    execute_terminal_command,
+    add_gutenberg_book_to_library, add_wiki_article_to_library
 ]
 
 
@@ -1464,12 +1676,15 @@ def generate_node(state: AgentState, config: RunnableConfig):
         "duckduckgo_search", "visit_page", "search_images", "search_books", "search_authors",
         # Knowledge & Notes
         "create_note", "read_note", "update_note", "list_notes", "delete_note", "search_notes",
+        # Library (RAG document store)
+        "search_library", "promote_library_search",
         # Graph Operations
-        "add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge", 
+        "add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge",
         "search_graph_nodes", "traverse_graph_node", "search_concepts",
         # Ingestion
-        "search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia", 
+        "search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia",
         "ingest_wikipedia_page", "check_ingestion_status", "get_books_by_subject", "ingest_web_page",
+        "add_gutenberg_book_to_library", "add_wiki_article_to_library",
         # Science / Research
         "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
         # Utility
@@ -1564,6 +1779,21 @@ def generate_node(state: AgentState, config: RunnableConfig):
     except:
         pass
 
+    # Load Library stats
+    library_context = ""
+    try:
+        mem = GraphMemory(workspace_id=workspace_id, base_dir="./memory_data")
+        lib_stats = mem.get_library_stats()
+        if lib_stats["chunk_count"] > 0:
+            library_context = f"""
+    DOCUMENT LIBRARY: {lib_stats['source_count']} sources, {lib_stats['chunk_count']} chunks available.
+    - Use 'search_library(query)' to find relevant passages from ingested documents.
+    - Use 'promote_library_search(query, k, min_score)' to search the library AND extract entities into the graph in one step. Chunks below min_score are filtered out.
+    - The library is NOT automatically included in context — search it when you need detailed information.
+    """
+    except:
+        pass
+
     # Build dynamic tools section based on enabled_tools
     if enabled_tools is not None:
         enabled_set = set(enabled_tools)
@@ -1612,6 +1842,8 @@ def generate_node(state: AgentState, config: RunnableConfig):
     {emotion_context}
 
     {notes_context}
+
+    {library_context}
 
     {tools_section}
 
@@ -1738,11 +1970,13 @@ def generate_node(state: AgentState, config: RunnableConfig):
                     # Heuristic: If key exists or if it's one of our known workspace tools
                     if "workspace_id" in tc["args"] or tc["name"] in [
                         "create_note", "read_note", "update_note", "list_notes", "delete_note", "search_notes",
+                        "search_library", "promote_library_search",
                         "add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge", "delete_graph_node", "delete_graph_edge",
                         "search_graph_nodes", "traverse_graph_node", "search_concepts",
                         "ingest_web_page", "ingest_gutenberg_book", "ingest_wikipedia_page", "check_ingestion_status", "generate_lesson", "generate_article",
                         "ingest_biorxiv_article", "search_reddit", "read_note",
-                        "execute_terminal_command"
+                        "execute_terminal_command",
+                        "add_gutenberg_book_to_library", "add_wiki_article_to_library"
                     ]:
                         print(f"DEBUG: Injecting workspace_id='{workspace_id}' into tool '{tc['name']}'")
                         tc["args"]["workspace_id"] = workspace_id
@@ -2003,10 +2237,12 @@ async def dynamic_tool_node(state: AgentState, config: RunnableConfig):
     DEFAULT_ENABLED_TOOLS = [
         "duckduckgo_search", "visit_page", "search_images", "search_books", "search_authors",
         "create_note", "read_note", "update_note", "list_notes", "delete_note", "search_notes",
-        "add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge", 
+        "search_library", "promote_library_search",
+        "add_graph_node", "update_graph_node", "add_graph_edge", "update_graph_edge",
         "search_graph_nodes", "traverse_graph_node", "search_concepts",
-        "search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia", 
+        "search_gutenberg_books", "ingest_gutenberg_book", "search_wikipedia",
         "ingest_wikipedia_page", "check_ingestion_status", "get_books_by_subject", "ingest_web_page",
+        "add_gutenberg_book_to_library", "add_wiki_article_to_library",
         "search_biorxiv", "read_biorxiv_abstract", "search_arxiv", "read_arxiv_abstract", "ingest_arxiv_paper",
         "generate_lesson", "generate_article",
         "lookup_skill", "create_skill",

@@ -136,6 +136,10 @@ class WorkspaceSettings(BaseModel):
     skill_auto_inject_threshold: float = 0.85     # Tier 2: inject full instructions
     skill_surface_max: int = 5                    # Max skills surfaced per turn
 
+    # Library RAG Settings
+    library_k: int = 5
+    library_min_score: float = 0.5
+
     # Workspace-as-Tool Settings
     is_tool_enabled: bool = False
     tool_name: Optional[str] = None  # e.g., "physics_expert" -> becomes "ask_physics_expert"

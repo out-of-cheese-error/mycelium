@@ -17,6 +17,7 @@ import SkillsArea from './components/SkillsArea';
 import CallArea from './components/CallArea';
 import TerminalArea from './components/TerminalArea';
 import TTSReaderArea from './components/TTSReaderArea';
+import LibraryArea from './components/LibraryArea';
 import { ThemeProvider, applyThemeToDOM } from './components/ThemeProvider';
 
 function App() {
@@ -234,6 +235,9 @@ function App() {
                                             useStore.getState().fetchNotesList(currentWorkspace.id);
                                         } else if (tab.id === 'theWay' && currentWorkspace) {
                                             useStore.getState().fetchSkillsList(currentWorkspace.id);
+                                        } else if (tab.id === 'library' && currentWorkspace) {
+                                            useStore.getState().fetchLibrarySources();
+                                            useStore.getState().fetchLibraryStats();
                                         }
                                     };
 
@@ -389,6 +393,11 @@ function App() {
                         < div className={`absolute inset-0 z-10 bg-gray-900 ${activeView === 'grow' ? 'block' : 'hidden'}`}>
                             <GrowArea />
                         </div >
+
+                        {/* LIBRARY VIEW */}
+                        <div className={`absolute inset-0 z-10 bg-gray-900 ${activeView === 'library' ? 'block' : 'hidden'}`}>
+                            <LibraryArea />
+                        </div>
 
                         {/* THE WAY (SKILLS) VIEW */}
                         < div className={`absolute inset-0 z-10 bg-gray-900 ${activeView === 'theWay' ? 'block' : 'hidden'}`}>
