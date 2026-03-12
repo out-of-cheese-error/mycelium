@@ -154,19 +154,187 @@ Output strictly as JSON:
             return json.loads(match.group(0))
         raise ValueError("Failed to parse outline from LLM response")
 
+    def _build_cluster_roster(self, cluster_summary: dict) -> str:
+        """Build a compact one-line-per-node overview of the cluster."""
+        lines = []
+        for node_id in cluster_summary["nodes"]:
+            if self.memory.graph.has_node(node_id):
+                data = self.memory.graph.nodes[node_id]
+                node_type = data.get("type", "Unknown")
+                desc = data.get("description", "")
+                if len(desc) > 120:
+                    desc = desc[:120] + "..."
+                degree = self.memory.graph.degree[node_id]
+                lines.append(f"- {node_id} ({node_type}, {degree} connections): {desc}")
+        return "\n".join(lines)
+
+    def _build_unexplored_roster(self, cluster_summary: dict, explored: set) -> str:
+        """Build roster of nodes not yet explored."""
+        lines = []
+        for node_id in cluster_summary["nodes"]:
+            if node_id in explored:
+                continue
+            if self.memory.graph.has_node(node_id):
+                data = self.memory.graph.nodes[node_id]
+                desc = data.get("description", "")
+                if len(desc) > 120:
+                    desc = desc[:120] + "..."
+                degree = self.memory.graph.degree[node_id]
+                lines.append(f"- {node_id} ({data.get('type', 'Unknown')}, {degree} connections): {desc}")
+        return "\n".join(lines) if lines else "(All entities explored)"
+
+    def _parse_exploration_actions(self, response: str) -> tuple:
+        """Parse LLM exploration response. Returns (node_ids_to_explore, is_done)."""
+        match = re.search(r"\{.*\}", response, re.DOTALL)
+        if not match:
+            return [], True
+        try:
+            data = json.loads(match.group(0))
+            action = data.get("action", "DONE")
+            if action == "DONE":
+                return [], True
+            nodes = data.get("explore", [])
+            valid = [n for n in nodes if self.memory.graph.has_node(n)]
+            return valid[:15], False
+        except json.JSONDecodeError:
+            return [], True
+
+    async def _explore_cluster_graph(self, section_title: str, section_desc: str,
+                                      cluster_summary: dict, topic: str,
+                                      article_outline: list = None,
+                                      max_rounds: int = 3) -> str:
+        """LLM-driven iterative graph exploration to gather section-relevant context."""
+        roster = self._build_cluster_roster(cluster_summary)
+        explored_context = []
+        explored_node_ids = set()
+
+        # Build outline context so the LLM knows the full article structure
+        outline_context = ""
+        if article_outline:
+            outline_lines = [f"  - {s['title']}: {s.get('description', '')}" for s in article_outline]
+            outline_context = f"\nFull Article Outline (this section is part of a larger article):\n" + "\n".join(outline_lines)
+
+        for round_num in range(max_rounds):
+            if round_num == 0:
+                exploration_prompt = f"""You are researching a knowledge graph to gather context for writing an article section.
+
+Article Main Subject: "{topic}"
+Section Title: "{section_title}"
+Section Purpose: {section_desc}
+{outline_context}
+
+Cluster Summary: {cluster_summary['summary']}
+
+Available Entities in this knowledge cluster:
+{roster}
+
+Your task: Select the most relevant entities to explore in detail for writing this section.
+
+IMPORTANT: This section is part of a larger article about "{topic}". Prioritize entities that:
+1. Directly relate to the main subject "{topic}" AND this section's focus
+2. Provide specific facts that connect this section's theme back to the main subject
+3. Bridge between this section's cluster and the overarching article narrative
+
+Avoid selecting entities that are only tangentially related or would lead the section away from the main subject.
+
+Respond with JSON:
+{{"action": "EXPLORE", "explore": ["entity_id_1", "entity_id_2", ...], "reasoning": "brief explanation"}}
+
+Or if the cluster summary alone is sufficient:
+{{"action": "DONE", "reasoning": "why no exploration needed"}}
+
+Select 5-15 entities that are most relevant."""
+            else:
+                already_explored = "\n".join(explored_context)
+                unexplored = self._build_unexplored_roster(cluster_summary, explored_node_ids)
+                is_final = (round_num == max_rounds - 1)
+
+                exploration_prompt = f"""You are continuing to research a knowledge graph for an article section.
+
+Article Main Subject: "{topic}"
+Section Title: "{section_title}"
+Section Purpose: {section_desc}
+{outline_context}
+
+Context gathered so far:
+{already_explored}
+
+Available entities NOT yet explored:
+{unexplored}
+
+{"This is the final exploration round. Select any remaining important entities, or respond DONE." if is_final else "Select more entities to explore, or respond DONE if you have enough context."}
+
+Remember: prioritize entities that connect this section back to the main subject "{topic}" and support the overall article narrative.
+
+Respond with JSON:
+{{"action": "EXPLORE", "explore": ["entity_id_1", ...], "reasoning": "brief explanation"}}
+or
+{{"action": "DONE", "reasoning": "why exploration is complete"}}"""
+
+            response = await self._llm_invoke(exploration_prompt, timeout=30.0)
+            nodes_to_explore, is_done = self._parse_exploration_actions(response)
+
+            if is_done or not nodes_to_explore:
+                break
+
+            # Gather detailed info for selected nodes
+            round_lines = [f"--- Exploration Round {round_num + 1} ---"]
+            for node_id in nodes_to_explore:
+                if node_id in explored_node_ids:
+                    continue
+                explored_node_ids.add(node_id)
+                neighbor_data = self.memory.get_node_neighbors(node_id)
+                if not neighbor_data:
+                    continue
+
+                round_lines.append(f"\n=== {neighbor_data['id']} ({neighbor_data['type']}) ===")
+                round_lines.append(f"Description: {neighbor_data['description']}")
+                if neighbor_data["neighbors"]:
+                    round_lines.append("Connections:")
+                    for nb in neighbor_data["neighbors"]:
+                        nb_desc = ""
+                        if self.memory.graph.has_node(nb["id"]):
+                            nb_data = self.memory.graph.nodes[nb["id"]]
+                            nb_desc = nb_data.get("description", "")
+                            nb_type = nb_data.get("type", "Unknown")
+                            if len(nb_desc) > 100:
+                                nb_desc = nb_desc[:100] + "..."
+                            round_lines.append(
+                                f"  - [{nb['relation']}] -> {nb['id']} ({nb_type}): {nb_desc}"
+                            )
+                        else:
+                            round_lines.append(f"  - [{nb['relation']}] -> {nb['id']}")
+
+            explored_context.append("\n".join(round_lines))
+
+        if not explored_context:
+            return self.memory.get_subgraph_context(cluster_summary["nodes"][:60])
+
+        return "\n\n".join(explored_context)
+
     async def _generate_section(self, section_title: str, section_desc: str,
-                                 cluster_summary: dict, topic: str) -> str:
+                                 cluster_summary: dict, topic: str,
+                                 article_outline: list = None) -> str:
         """Generate content for a single article section grounded in its cluster."""
-        # Get full context from the cluster's nodes
-        context_nodes = cluster_summary["nodes"][:60]
-        context = self.memory.get_subgraph_context(context_nodes)
+        # LLM-driven graph exploration to gather targeted context
+        context = await self._explore_cluster_graph(
+            section_title, section_desc, cluster_summary, topic,
+            article_outline=article_outline
+        )
+
+        # Build outline context for the writing prompt
+        outline_info = ""
+        if article_outline:
+            outline_lines = [f"  - {s['title']}" for s in article_outline]
+            outline_info = f"\nArticle Structure:\n" + "\n".join(outline_lines)
 
         prompt = f"""You are writing a section of a long-form article about: "{topic}"
 
 Section Title: {section_title}
 Section Purpose: {section_desc}
+{outline_info}
 
-Knowledge Context (from knowledge graph):
+Knowledge Context (gathered by exploring the knowledge graph):
 {context}
 
 Cluster Summary: {cluster_summary['summary']}
@@ -175,6 +343,7 @@ Instructions:
 - Write a detailed, well-structured section (3-6 paragraphs).
 - Ground ALL claims in the provided knowledge context. Do not fabricate information.
 - Reference specific entities and relationships from the context.
+- Connect the content of this section back to the main subject "{topic}". This section should read as part of a coherent article, not a standalone essay.
 - Use clear, informative prose suitable for an educated reader.
 - Do NOT include the section title in your output — just the body text.
 - Use markdown formatting where appropriate (bold, italic, lists).
@@ -372,7 +541,7 @@ Output as a JSON array of strings:
 
             content = await self._generate_section(
                 section["title"], section.get("description", ""),
-                cluster_summary, topic
+                cluster_summary, topic, article_outline=body_sections
             )
             sections.append({
                 "title": section["title"],
@@ -792,9 +961,22 @@ Output strictly as a JSON array with one object per section, in order:
 
     async def _mutate_section(self, semaphore: asyncio.Semaphore,
                                section: SectionGene, surrounding: str,
-                               topic: str) -> str:
+                               topic: str, article_outline: list = None) -> str:
         """Rewrite a section using evaluator feedback."""
-        context = self.memory.get_subgraph_context(section.cluster_nodes[:50])
+        # Build cluster_summary dict from SectionGene fields for graph exploration
+        cluster_summary = {
+            "nodes": section.cluster_nodes,
+            "summary": section.cluster_summary,
+            "key_entities": section.sources,
+            "cluster_id": section.cluster_id,
+        }
+
+        # Use LLM-driven graph exploration for targeted context
+        context = await self._explore_cluster_graph(
+            section.title, section.section_description,
+            cluster_summary, topic, article_outline=article_outline
+        )
+
         feedback = section.scores.get("feedback", "No specific feedback.") if section.scores else ""
         sources_list = ", ".join(section.sources[:10]) if section.sources else "N/A"
 
@@ -809,7 +991,7 @@ Current Section Text:
 
 Evaluator Feedback: {feedback}
 
-Knowledge Context (ground truth):
+Knowledge Context (gathered by exploring the knowledge graph):
 {context}
 {cluster_info}
 Key Entities to Cover: {sources_list}
@@ -820,6 +1002,7 @@ Surrounding Sections (maintain consistency with these):
 Instructions:
 - Address the evaluator's feedback specifically.
 - Improve grounding by referencing more entities and relationships from the knowledge context.
+- Connect the content back to the main subject "{topic}" — this section should read as part of a coherent article.
 - Maintain consistency with the surrounding sections.
 - Keep the same general structure and length (3-6 paragraphs).
 - Output ONLY the rewritten section text, no titles or meta-commentary.
@@ -832,13 +1015,20 @@ Instructions:
         mutation_tasks = []
         mutation_indices = []
 
+        # Build outline once for all mutations
+        article_outline = [
+            {"title": s.title, "description": s.section_description}
+            for s in genome.sections
+        ]
+
         for i, section in enumerate(genome.sections):
             score = section.avg_score()
             prob = max(0.1, 1.0 - (score / 10.0))
             if random.random() < prob:
                 surrounding = self._get_surrounding_context(genome.sections, i)
                 mutation_tasks.append(
-                    self._mutate_section(semaphore, section, surrounding, topic)
+                    self._mutate_section(semaphore, section, surrounding, topic,
+                                         article_outline=article_outline)
                 )
                 mutation_indices.append(i)
 
