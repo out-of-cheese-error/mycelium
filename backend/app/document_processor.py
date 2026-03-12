@@ -207,10 +207,111 @@ IMPORTANT: The text may be in any language. You MUST translate ALL extracted ent
     except Exception as e:
         if workspace_id not in ingest_status: ingest_status[workspace_id] = {}
         ingest_status[workspace_id][job_id] = {
-            "status": "error", 
+            "status": "error",
             "error": str(e),
             "current": 0,
             "total": 0,
             "updated_at": time.time()
+        }
+        raise e
+
+
+async def process_file_library(file_path: str, workspace_id: str, chunk_size: int = 4800, chunk_overlap: int = 400, job_id: str = None, source_name: str = None):
+    """Chunks and embeds a file into the library (no LLM entity extraction)."""
+    from datetime import datetime
+
+    if not job_id:
+        job_id = str(uuid.uuid4())
+
+    if not source_name:
+        source_name = os.path.basename(file_path)
+
+    source_id = str(uuid.uuid4())
+
+    # Init Status
+    if workspace_id not in ingest_status:
+        ingest_status[workspace_id] = {}
+
+    ingest_status[workspace_id][job_id] = {
+        "status": "processing",
+        "current": 0,
+        "total": 0,
+        "filename": source_name,
+        "updated_at": time.time(),
+    }
+
+    # Reset control flag
+    if workspace_id in ingest_control and job_id in ingest_control[workspace_id]:
+        del ingest_control[workspace_id][job_id]
+
+    try:
+        loop = asyncio.get_event_loop()
+
+        if file_path.endswith(".pdf"):
+            loader = PyPDFLoader(file_path)
+        else:
+            loader = TextLoader(file_path)
+
+        docs = await loop.run_in_executor(None, loader.load)
+
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        chunks = text_splitter.split_documents(docs)
+
+        ingest_status[workspace_id][job_id]["total"] = len(chunks)
+        ingest_status[workspace_id][job_id]["updated_at"] = time.time()
+
+        memory = GraphMemory(workspace_id=workspace_id)
+        timestamp = datetime.now().isoformat()
+
+        # Process in batches of 20 for efficient embedding
+        batch_size = 20
+        for batch_start in range(0, len(chunks), batch_size):
+            await asyncio.sleep(0.05)
+
+            # Check cancellation
+            if workspace_id in ingest_control and ingest_control[workspace_id].get(job_id) == "stop":
+                ingest_status[workspace_id][job_id]["status"] = "cancelled"
+                ingest_status[workspace_id][job_id]["updated_at"] = time.time()
+                return {"chunks_added": batch_start}
+
+            batch_end = min(batch_start + batch_size, len(chunks))
+            batch = chunks[batch_start:batch_end]
+
+            chunk_dicts = []
+            for idx, chunk in enumerate(batch):
+                page_number = chunk.metadata.get("page", -1)
+                chunk_dicts.append({
+                    "text": chunk.page_content,
+                    "source_id": source_id,
+                    "source_name": source_name,
+                    "chunk_index": batch_start + idx,
+                    "page_number": page_number,
+                    "timestamp": timestamp,
+                })
+
+            await asyncio.to_thread(memory.add_library_chunks, chunk_dicts)
+
+            ingest_status[workspace_id][job_id]["current"] = batch_end
+            ingest_status[workspace_id][job_id]["updated_at"] = time.time()
+
+        ingest_status[workspace_id][job_id] = {
+            "status": "completed",
+            "current": len(chunks),
+            "total": len(chunks),
+            "filename": source_name,
+            "updated_at": time.time(),
+        }
+
+        return {"chunks_added": len(chunks), "source_id": source_id}
+
+    except Exception as e:
+        if workspace_id not in ingest_status:
+            ingest_status[workspace_id] = {}
+        ingest_status[workspace_id][job_id] = {
+            "status": "error",
+            "error": str(e),
+            "current": 0,
+            "total": 0,
+            "updated_at": time.time(),
         }
         raise e

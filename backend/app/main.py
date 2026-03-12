@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from app.agent import app_agent, run_background_extraction_and_emotions
 from app.memory_store import GraphMemory
-from app.routers import workspaces, threads, system, audio, concepts, hot_topics, connectors, graph_chat, skills, call, terminal, articles
+from app.routers import workspaces, threads, system, audio, concepts, hot_topics, connectors, graph_chat, skills, call, terminal, articles, library
 import os
 import uvicorn
 
@@ -34,6 +34,7 @@ app.include_router(skills.router)
 app.include_router(call.router)
 app.include_router(terminal.router)
 app.include_router(articles.router)
+app.include_router(library.router)
 
 
 # --- MCP Server Lifecycle ---

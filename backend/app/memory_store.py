@@ -75,6 +75,10 @@ class GraphMemory:
             name="skill_embeddings",
             metadata={"hnsw:space": "cosine"}
         )
+        self.library_collection = self.chroma_client.get_or_create_collection(
+            name="library_embeddings",
+            metadata={"hnsw:space": "cosine"}
+        )
 
     def load_graph(self):
         if os.path.exists(self.graph_path):
@@ -1186,4 +1190,139 @@ class GraphMemory:
         import random
         random.shuffle(established)
         return established[:n]
+
+    # --- Library Methods (flat document-chunk store for RAG) ---
+
+    def add_library_chunks(self, chunks: list):
+        """
+        Batch upsert document chunks into the library collection.
+        Each chunk dict: {text, source_id, source_name, chunk_index, page_number (optional), timestamp}
+        """
+        if not chunks:
+            return
+
+        texts = [c["text"] for c in chunks]
+        ids = [f"{c['source_id']}_{c['chunk_index']}" for c in chunks]
+        metadatas = [
+            {
+                "source_id": c["source_id"],
+                "source_name": c["source_name"],
+                "chunk_index": c["chunk_index"],
+                "page_number": c.get("page_number", -1),
+                "timestamp": c.get("timestamp", ""),
+            }
+            for c in chunks
+        ]
+
+        # Batch embed
+        embeddings = self.embedding_fn.embed_documents(texts)
+
+        self.library_collection.upsert(
+            ids=ids,
+            embeddings=embeddings,
+            documents=texts,
+            metadatas=metadatas,
+        )
+
+    def search_library(self, query: str, k: int = 5) -> list:
+        """Semantic search over library chunks. Returns list of {id, text, source_id, source_name, chunk_index, page_number, score}."""
+        try:
+            count = self.library_collection.count()
+            if count == 0:
+                return []
+            n = min(k, count)
+            query_embedding = self.embedding_fn.embed_query(query)
+            results = self.library_collection.query(
+                query_embeddings=[query_embedding],
+                n_results=n,
+                include=["metadatas", "distances", "documents"],
+            )
+        except Exception as e:
+            print(f"WARNING: Library search failed: {e}")
+            return []
+
+        hits = []
+        if results["ids"] and results["ids"][0]:
+            for i, doc_id in enumerate(results["ids"][0]):
+                meta = results["metadatas"][0][i]
+                similarity = 1.0 - (results["distances"][0][i] / 2.0)
+                hits.append({
+                    "id": doc_id,
+                    "text": results["documents"][0][i],
+                    "source_id": meta.get("source_id", ""),
+                    "source_name": meta.get("source_name", "Unknown"),
+                    "chunk_index": meta.get("chunk_index", 0),
+                    "page_number": meta.get("page_number", -1),
+                    "score": round(similarity, 4),
+                })
+        return hits
+
+    def get_library_sources(self) -> list:
+        """Returns all library sources with chunk counts: [{source_id, source_name, chunk_count, first_added}]."""
+        try:
+            count = self.library_collection.count()
+            if count == 0:
+                return []
+            results = self.library_collection.get(include=["metadatas"])
+        except Exception as e:
+            print(f"WARNING: get_library_sources failed: {e}")
+            return []
+
+        sources = {}
+        for meta in results["metadatas"]:
+            sid = meta.get("source_id", "")
+            if sid not in sources:
+                sources[sid] = {
+                    "source_id": sid,
+                    "source_name": meta.get("source_name", "Unknown"),
+                    "chunk_count": 0,
+                    "first_added": meta.get("timestamp", ""),
+                }
+            sources[sid]["chunk_count"] += 1
+        return list(sources.values())
+
+    def get_library_chunks_by_source(self, source_id: str) -> list:
+        """Returns all chunks for a source, ordered by chunk_index."""
+        try:
+            results = self.library_collection.get(
+                where={"source_id": source_id},
+                include=["documents", "metadatas"],
+            )
+        except Exception as e:
+            print(f"WARNING: get_library_chunks_by_source failed: {e}")
+            return []
+
+        chunks = []
+        if results["ids"]:
+            for i, doc_id in enumerate(results["ids"]):
+                meta = results["metadatas"][i]
+                chunks.append({
+                    "id": doc_id,
+                    "text": results["documents"][i],
+                    "chunk_index": meta.get("chunk_index", 0),
+                    "page_number": meta.get("page_number", -1),
+                    "source_name": meta.get("source_name", "Unknown"),
+                })
+        chunks.sort(key=lambda c: c["chunk_index"])
+        return chunks
+
+    def delete_library_source(self, source_id: str):
+        """Deletes all chunks belonging to a source."""
+        try:
+            self.library_collection.delete(where={"source_id": source_id})
+        except Exception as e:
+            print(f"WARNING: delete_library_source failed: {e}")
+
+    def get_library_stats(self) -> dict:
+        """Returns {chunk_count, source_count}."""
+        try:
+            count = self.library_collection.count()
+            if count == 0:
+                return {"chunk_count": 0, "source_count": 0}
+            results = self.library_collection.get(include=["metadatas"])
+            source_ids = set(m.get("source_id", "") for m in results["metadatas"])
+            return {"chunk_count": count, "source_count": len(source_ids)}
+        except Exception as e:
+            print(f"WARNING: get_library_stats failed: {e}")
+            return {"chunk_count": 0, "source_count": 0}
 

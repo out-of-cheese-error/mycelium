@@ -1,4 +1,4 @@
-import { MessageSquare, Network, Notebook, BookOpen, Layers, Flame, Route, BrainCircuit, Compass, Phone, SquareTerminal, AudioLines } from 'lucide-react';
+import { MessageSquare, Network, Notebook, BookOpen, Layers, Flame, Route, BrainCircuit, Compass, Phone, SquareTerminal, AudioLines, LibraryBig } from 'lucide-react';
 
 /**
  * Central registry of all available tabs.
@@ -19,6 +19,7 @@ export const TAB_REGISTRY = [
     { id: 'hot_topics', label: 'Hot Topics', icon: Flame, description: 'Discover trending topics and frequently referenced subjects in your knowledge graph.' },
     { id: 'connectors', label: 'Connectors', icon: Route, description: 'Find connections and pathways between different concepts in your knowledge base.' },
     { id: 'grow', label: 'Grow', icon: BrainCircuit, description: 'Expand your knowledge graph by ingesting new documents, URLs, and content.' },
+    { id: 'library', label: 'Library', icon: LibraryBig, activeColor: 'bg-amber-600', description: 'Searchable document library for RAG-based knowledge retrieval.' },
     { id: 'theWay', label: 'theWay', icon: Compass, activeColor: 'bg-purple-600', description: 'Custom skills and workflows to enhance your AI assistant\'s capabilities.' },
     { id: 'call', label: 'Call', icon: Phone, activeColor: 'bg-green-600', description: 'Live voice conversation with your AI assistant.' },
     { id: 'tts_reader', label: 'Reader', icon: AudioLines, activeColor: 'bg-orange-600', description: 'Text-to-speech reader. Paste text or load a URL to have it read aloud paragraph by paragraph.' },

@@ -909,6 +909,155 @@ export const useStore = create((set, get) => ({
         }
     },
 
+    // --- Library (document RAG store) ---
+    librarySources: [],
+    librarySearchResults: [],
+    librarySelectedChunks: [],
+    libraryStats: null,
+    libraryLoading: false,
+
+    fetchLibraryStats: async () => {
+        const ws = get().currentWorkspace?.id;
+        if (!ws) return;
+        try {
+            const res = await axios.get(`${API_base}/library/${ws}/stats`);
+            set({ libraryStats: res.data });
+        } catch (e) {
+            console.error("Fetch library stats failed", e);
+        }
+    },
+
+    fetchLibrarySources: async () => {
+        const ws = get().currentWorkspace?.id;
+        if (!ws) return;
+        set({ libraryLoading: true });
+        try {
+            const res = await axios.get(`${API_base}/library/${ws}/sources`);
+            set({ librarySources: res.data.sources || [] });
+        } catch (e) {
+            console.error("Fetch library sources failed", e);
+            set({ librarySources: [] });
+        } finally {
+            set({ libraryLoading: false });
+        }
+    },
+
+    searchLibrary: async (query, k = 10) => {
+        const ws = get().currentWorkspace?.id;
+        if (!ws || !query.trim()) return;
+        set({ libraryLoading: true });
+        try {
+            const res = await axios.post(`${API_base}/library/${ws}/search`, { query, k });
+            set({ librarySearchResults: res.data.results || [] });
+        } catch (e) {
+            console.error("Library search failed", e);
+            set({ librarySearchResults: [] });
+        } finally {
+            set({ libraryLoading: false });
+        }
+    },
+
+    fetchLibraryChunks: async (sourceId) => {
+        const ws = get().currentWorkspace?.id;
+        if (!ws) return;
+        set({ libraryLoading: true });
+        try {
+            const res = await axios.get(`${API_base}/library/${ws}/source/${sourceId}/chunks`);
+            set({ librarySelectedChunks: res.data.chunks || [] });
+        } catch (e) {
+            console.error("Fetch library chunks failed", e);
+            set({ librarySelectedChunks: [] });
+        } finally {
+            set({ libraryLoading: false });
+        }
+    },
+
+    deleteLibrarySource: async (sourceId) => {
+        const ws = get().currentWorkspace?.id;
+        if (!ws) return;
+        try {
+            await axios.delete(`${API_base}/library/${ws}/source/${sourceId}`);
+            set(state => ({
+                librarySources: state.librarySources.filter(s => s.source_id !== sourceId),
+                librarySelectedChunks: [],
+            }));
+            get().fetchLibraryStats();
+        } catch (e) {
+            console.error("Delete library source failed", e);
+        }
+    },
+
+    promoteLibrarySearch: async (query, k, minScore) => {
+        const ws = get().currentWorkspace?.id;
+        if (!ws || !query.trim()) return null;
+        try {
+            const res = await axios.post(`${API_base}/library/${ws}/promote`, {
+                query, k, min_score: minScore,
+            });
+            // Refresh graph after promotion
+            get().fetchGraph();
+            return res.data;
+        } catch (e) {
+            console.error("Promote library search failed", e);
+            return { error: e.message };
+        }
+    },
+
+    uploadToLibrary: async (files, settings = { chunkSize: 4800, chunkOverlap: 400 }) => {
+        const ws = get().currentWorkspace?.id;
+        const fileArray = Array.from(files || []);
+        if (!ws || fileArray.length === 0) return;
+
+        set({ isUploading: true });
+        let pollInterval;
+
+        try {
+            await get().checkIngestStatus();
+            pollInterval = setInterval(async () => {
+                await get().checkIngestStatus();
+            }, 1000);
+
+            let successCount = 0;
+            let failCount = 0;
+
+            const uploadPromises = fileArray.map(async (file) => {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('chunk_size', settings.chunkSize);
+                formData.append('chunk_overlap', settings.chunkOverlap);
+
+                try {
+                    await axios.post(`${API_base}/library/${ws}/upload`, formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                    successCount++;
+                } catch (e) {
+                    console.error(`Library upload failed for ${file.name}`, e);
+                    failCount++;
+                }
+            });
+
+            await Promise.all(uploadPromises);
+
+            if (failCount === 0) {
+                alert(`Successfully added ${successCount} file(s) to library!`);
+            } else {
+                alert(`Finished with ${successCount} success(es) and ${failCount} failure(s).`);
+            }
+
+            get().fetchLibrarySources();
+            get().fetchLibraryStats();
+        } catch (e) {
+            console.error("Library upload failed", e);
+        } finally {
+            setTimeout(() => {
+                clearInterval(pollInterval);
+                set({ isUploading: false });
+                get().checkIngestStatus();
+            }, 2000);
+        }
+    },
+
     // --- Skills (theWay) ---
     skillsList: [],
     activeSkill: null, // { id, title, summary, explanation, updated_at }
