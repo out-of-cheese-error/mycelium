@@ -19,3 +19,4 @@ pypdf
 arxiv
 youtube-transcript-api
 youtube-search-python
+markdownify

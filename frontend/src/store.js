@@ -1058,6 +1058,113 @@ export const useStore = create((set, get) => ({
         }
     },
 
+    // --- Web Crawler ---
+    crawlerState: 'idle', // 'idle' | 'crawling' | 'results' | 'ingesting'
+    crawlerResults: [],
+    crawlerSeedInfo: null,
+    crawlerGraph: null,
+    crawlerError: null,
+    crawlerIngestJobs: [],
+
+    discoverCrawlLinks: async (seedUrl, topic, includeWebSearch = false, maxDepth = 1, depthMinScore = 0.7, maxLinks = 200) => {
+        const ws = get().currentWorkspace?.id;
+        if (!ws) return;
+        set({ crawlerState: 'crawling', crawlerError: null, crawlerResults: [], crawlerSeedInfo: null, crawlerGraph: null });
+        try {
+            const res = await axios.post(`${API_base}/library/${ws}/crawl-discover`, {
+                seed_url: seedUrl,
+                topic,
+                include_web_search: includeWebSearch,
+                max_depth: maxDepth,
+                depth_min_score: depthMinScore,
+                max_links: maxLinks,
+            }, { timeout: 600000 });
+            set({
+                crawlerState: 'results',
+                crawlerResults: res.data.links || [],
+                crawlerSeedInfo: { seed_title: res.data.seed_title, seed_summary: res.data.seed_summary },
+                crawlerGraph: res.data.graph || null,
+            });
+        } catch (e) {
+            console.error("Crawl discover failed", e);
+            set({ crawlerState: 'idle', crawlerError: e.response?.data?.detail || e.message });
+        }
+    },
+
+    ingestCrawlSelections: async (urls, chunkSize = 4800, chunkOverlap = 400) => {
+        const ws = get().currentWorkspace?.id;
+        if (!ws || urls.length === 0) return;
+        set({ crawlerState: 'ingesting', crawlerIngestJobs: urls.map(u => ({ ...u, status: 'pending' })) });
+        try {
+            const res = await axios.post(`${API_base}/library/${ws}/crawl-ingest`, {
+                urls: urls.map(u => ({ url: u.url, source_name: u.source_name })),
+                chunk_size: chunkSize,
+                chunk_overlap: chunkOverlap,
+            });
+            const jobs = res.data.jobs || [];
+            set({ crawlerIngestJobs: jobs.map(j => ({ ...j, source_name: j.url })) });
+
+            // Poll ingest status
+            const pollInterval = setInterval(async () => {
+                try {
+                    await get().checkIngestStatus();
+                } catch {}
+            }, 1500);
+
+            // Wait for all jobs (poll up to 5 minutes)
+            // Small delay to let background tasks register in ingest_status
+            await new Promise(r => setTimeout(r, 2000));
+            const startTime = Date.now();
+            const checkDone = () => new Promise((resolve) => {
+                const interval = setInterval(async () => {
+                    try {
+                        const statusRes = await axios.get(`${API_base}/workspaces/${ws}/ingest_status`);
+                        const jobsArray = statusRes.data?.jobs || [];
+                        // Build lookup dict from jobs array
+                        const statuses = {};
+                        for (const job of jobsArray) {
+                            if (job.job_id) statuses[job.job_id] = job;
+                        }
+                        const jobIds = jobs.map(j => j.job_id);
+                        const allDone = jobIds.every(jid =>
+                            !statuses[jid] || statuses[jid].status === 'completed' || statuses[jid].status === 'error'
+                        );
+                        if (allDone || Date.now() - startTime > 300000) {
+                            clearInterval(interval);
+                            clearInterval(pollInterval);
+                            // Update job statuses
+                            const updatedJobs = jobs.map(j => ({
+                                ...j,
+                                status: statuses[j.job_id]?.status || 'completed',
+                            }));
+                            set({ crawlerIngestJobs: updatedJobs });
+                            resolve();
+                        }
+                    } catch {
+                        // Keep polling
+                    }
+                }, 2000);
+            });
+            await checkDone();
+            get().fetchLibrarySources();
+            get().fetchLibraryStats();
+        } catch (e) {
+            console.error("Crawl ingest failed", e);
+            set({ crawlerState: 'results', crawlerError: e.response?.data?.detail || e.message });
+        }
+    },
+
+    resetCrawler: () => {
+        set({
+            crawlerState: 'idle',
+            crawlerResults: [],
+            crawlerSeedInfo: null,
+            crawlerGraph: null,
+            crawlerError: null,
+            crawlerIngestJobs: [],
+        });
+    },
+
     // --- Skills (theWay) ---
     skillsList: [],
     activeSkill: null, // { id, title, summary, explanation, updated_at }
