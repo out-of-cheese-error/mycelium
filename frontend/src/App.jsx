@@ -233,6 +233,7 @@ function App() {
                                         // Special handlers for certain tabs
                                         if (tab.id === 'notes' && currentWorkspace) {
                                             useStore.getState().fetchNotesList(currentWorkspace.id);
+                                            useStore.getState().fetchFolders(currentWorkspace.id);
                                         } else if (tab.id === 'theWay' && currentWorkspace) {
                                             useStore.getState().fetchSkillsList(currentWorkspace.id);
                                         } else if (tab.id === 'library' && currentWorkspace) {

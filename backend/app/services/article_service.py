@@ -617,7 +617,8 @@ Output as a JSON array of strings:
             "topic": topic,
             "mode": mode,
             "cited_entities": list(set(all_cited)),
-            "sections_meta": sections_meta
+            "sections_meta": sections_meta,
+            "folder": None
         }
         with open(note_path, 'w') as f:
             json.dump(note_data, f, indent=2)
@@ -1209,7 +1210,8 @@ Be factual. Do not invent explanations for score changes you cannot see in the d
             "content": changelog_md,
             "updated_at": time.time(),
             "type": "changelog",
-            "source_note_id": original_note_id
+            "source_note_id": original_note_id,
+            "folder": None
         }
         with open(cl_note_path, 'w') as f:
             json.dump(cl_note_data, f, indent=2)

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useStore } from '../store';
@@ -6,8 +6,40 @@ import {
     Save, Edit2, Plus, Trash2, FileText, Bold, Italic, List, ListOrdered,
     Heading1, Heading2, Heading3, Code, Link, Table, Quote, Strikethrough,
     Minus, CheckSquare, Eye, EyeOff, X, Check, Loader2,
-    Undo2, Redo2, Columns, Square, Dna, Settings2, ChevronDown, PenLine
+    Undo2, Redo2, Columns, Square, Dna, Settings2, ChevronDown, PenLine,
+    FolderPlus, Upload, ChevronRight, Folder, ExternalLink, FileType2
 } from 'lucide-react';
+
+// PDF Viewer component (uses browser's native PDF rendering via iframe)
+const PdfViewer = ({ note, workspaceId, apiBase }) => {
+    const pdfUrl = `${apiBase}/workspaces/${workspaceId}/notes/pdfs/${note.pdf_filename}`;
+
+    return (
+        <div className="flex-1 flex flex-col">
+            <div className="p-3 border-b border-gray-800 flex justify-between items-center bg-gray-900/80 backdrop-blur-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                    <FileType2 size={20} className="text-red-400 flex-shrink-0" />
+                    <h2 className="text-xl font-bold text-white truncate">{note.title}</h2>
+                </div>
+                <a
+                    href={pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 text-sm flex-shrink-0 transition-colors"
+                >
+                    <ExternalLink size={14} />
+                    Open in new tab
+                </a>
+            </div>
+            <iframe
+                src={pdfUrl}
+                className="flex-1 w-full bg-white rounded-none"
+                title={note.title}
+                style={{ border: 'none' }}
+            />
+        </div>
+    );
+};
 
 // Toast notification component
 const Toast = ({ message, type, onClose }) => {
@@ -136,8 +168,19 @@ const NotesArea = () => {
         generateArticle,
         articleGenerating,
         articleEvolving,
-        articleProgress
+        articleProgress,
+        foldersList,
+        expandedFolders,
+        fetchFolders,
+        createFolder,
+        renameFolder,
+        deleteFolder,
+        moveNoteToFolder,
+        toggleFolder,
+        uploadPdfNote
     } = useStore();
+
+    const apiBase = useStore(state => state.API_BASE);
 
     const [editContent, setEditContent] = useState("");
     const [editTitle, setEditTitle] = useState("");
@@ -172,8 +215,39 @@ const NotesArea = () => {
     useEffect(() => {
         if (currentWorkspace) {
             fetchNotesList(currentWorkspace.id);
+            fetchFolders(currentWorkspace.id);
         }
     }, [currentWorkspace]);
+
+    // PDF upload ref
+    const pdfInputRef = useRef(null);
+
+    // Drag-and-drop state
+    const [dragOverFolder, setDragOverFolder] = useState(null);
+    const [renamingFolder, setRenamingFolder] = useState(null);
+    const [renameFolderValue, setRenameFolderValue] = useState('');
+
+    // Compute folder groups from notes list
+    const folderGroups = useMemo(() => {
+        const groups = {};
+        const rootNotes = [];
+        notesList.forEach(note => {
+            if (note.folder) {
+                if (!groups[note.folder]) groups[note.folder] = [];
+                groups[note.folder].push(note);
+            } else {
+                rootNotes.push(note);
+            }
+        });
+        return { groups, rootNotes };
+    }, [notesList]);
+
+    // Get all folder names (from manifest + any that appear on notes)
+    const allFolderNames = useMemo(() => {
+        const names = new Set(foldersList.map(f => f.name));
+        Object.keys(folderGroups.groups).forEach(name => names.add(name));
+        return Array.from(names).sort();
+    }, [foldersList, folderGroups.groups]);
 
     // Update local state when active note changes
     useEffect(() => {
@@ -315,6 +389,60 @@ const NotesArea = () => {
         setToast({ message: 'Note deleted', type: 'success' });
     };
 
+    const handleCreateFolder = async () => {
+        const name = prompt("Folder name:");
+        if (name && name.trim()) {
+            await createFolder(name.trim());
+            setToast({ message: `Folder "${name.trim()}" created`, type: 'success' });
+        }
+    };
+
+    const handlePdfUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        // Determine current folder context (null = root)
+        const folder = activeNote?.folder || null;
+        await uploadPdfNote(file, folder);
+        setToast({ message: `PDF "${file.name}" uploaded`, type: 'success' });
+        // Reset input
+        if (pdfInputRef.current) pdfInputRef.current.value = '';
+    };
+
+    const handleNoteDragStart = (e, noteId) => {
+        e.dataTransfer.setData('text/note-id', noteId);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleFolderDrop = (e, folderName) => {
+        e.preventDefault();
+        setDragOverFolder(null);
+        const noteId = e.dataTransfer.getData('text/note-id');
+        if (noteId) {
+            moveNoteToFolder(noteId, folderName);
+            setToast({ message: `Note moved to ${folderName || 'root'}`, type: 'success' });
+        }
+    };
+
+    const handleFolderDragOver = (e, folderName) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDragOverFolder(folderName);
+    };
+
+    const startRenameFolder = (name) => {
+        setRenamingFolder(name);
+        setRenameFolderValue(name);
+    };
+
+    const confirmRenameFolder = async () => {
+        if (renamingFolder && renameFolderValue.trim() && renameFolderValue.trim() !== renamingFolder) {
+            await renameFolder(renamingFolder, renameFolderValue.trim());
+            setToast({ message: `Folder renamed`, type: 'success' });
+        }
+        setRenamingFolder(null);
+        setRenameFolderValue('');
+    };
+
     // Undo/Redo handlers
     const handleUndo = useCallback(() => {
         if (historyIndex > 0) {
@@ -442,6 +570,9 @@ const NotesArea = () => {
                 {/* MAIN EDITOR AREA */}
                 <div className="flex-1 flex flex-col border-r border-gray-800">
                     {activeNote ? (
+                        activeNote.type === 'pdf' ? (
+                            <PdfViewer note={activeNote} workspaceId={currentWorkspace.id} apiBase={apiBase} />
+                        ) :
                         <>
                             {/* Header */}
                             <div className="p-3 border-b border-gray-800 flex justify-between items-center bg-gray-900/80 backdrop-blur-sm relative z-30">
@@ -722,6 +853,20 @@ const NotesArea = () => {
                                 {articleGenerating ? <Loader2 size={18} className="animate-spin" /> : <PenLine size={18} />}
                             </button>
                             <button
+                                onClick={() => pdfInputRef.current?.click()}
+                                className="p-1.5 hover:bg-gray-800 rounded-lg text-red-400 transition-colors"
+                                title="Upload PDF"
+                            >
+                                <Upload size={18} />
+                            </button>
+                            <button
+                                onClick={handleCreateFolder}
+                                className="p-1.5 hover:bg-gray-800 rounded-lg text-yellow-400 transition-colors"
+                                title="New Folder"
+                            >
+                                <FolderPlus size={18} />
+                            </button>
+                            <button
                                 onClick={handleCreate}
                                 className="p-1.5 hover:bg-gray-800 rounded-lg text-blue-400 transition-colors"
                                 title="Create Note"
@@ -730,6 +875,15 @@ const NotesArea = () => {
                             </button>
                         </div>
                     </div>
+
+                    {/* Hidden PDF input */}
+                    <input
+                        ref={pdfInputRef}
+                        type="file"
+                        accept=".pdf"
+                        onChange={handlePdfUpload}
+                        className="hidden"
+                    />
 
                     {/* Article Topic Input */}
                     {showArticlePrompt && (
@@ -781,45 +935,157 @@ const NotesArea = () => {
                     )}
 
                     <div className="flex-1 overflow-y-auto">
-                        {notesList.length === 0 ? (
+                        {notesList.length === 0 && allFolderNames.length === 0 ? (
                             <div className="p-4 text-center text-xs text-gray-600">
                                 <FileText size={24} className="mx-auto mb-2 text-gray-700" />
                                 <p>No notes yet.</p>
                                 <p className="mt-1">Click + to create one.</p>
                             </div>
                         ) : (
-                            notesList.map(note => (
-                                <div
-                                    key={note.id}
-                                    onClick={() => selectNote(note)}
-                                    className={`p-3 border-b border-gray-800 cursor-pointer transition-all duration-150 group relative
-                                                  ${activeNote?.id === note.id
-                                            ? 'bg-gray-800 border-l-2 border-l-blue-500'
-                                            : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'}`}
-                                >
-                                    <div className="font-medium text-gray-300 text-sm truncate pr-6 flex items-center gap-1.5">
-                                        {note.title || "Untitled"}
-                                        {note.type === 'article' && (
-                                            <Dna size={12} className="text-purple-400 flex-shrink-0" title="Article (evolvable)" />
-                                        )}
-                                    </div>
-                                    <div className="text-xs text-gray-500 mt-1">
-                                        {new Date((note.updated_at || 0) * 1000).toLocaleDateString()}
-                                    </div>
+                            <>
+                                {/* Folders */}
+                                {allFolderNames.map(folderName => {
+                                    const isExpanded = expandedFolders[folderName];
+                                    const folderNotes = folderGroups.groups[folderName] || [];
+                                    const isDropTarget = dragOverFolder === folderName;
 
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDelete(note.id);
-                                        }}
-                                        className="absolute right-2 top-3 p-1 text-gray-600 hover:text-red-400 
-                                                     opacity-0 group-hover:opacity-100 transition-all duration-150"
-                                        title="Delete note"
+                                    return (
+                                        <div key={`folder-${folderName}`}>
+                                            {/* Folder header */}
+                                            <div
+                                                className={`px-3 py-2 border-b border-gray-800 cursor-pointer flex items-center justify-between group
+                                                    ${isDropTarget ? 'bg-blue-900/30 border-l-2 border-l-blue-400' : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'}`}
+                                                onClick={() => toggleFolder(folderName)}
+                                                onDragOver={(e) => handleFolderDragOver(e, folderName)}
+                                                onDragLeave={() => setDragOverFolder(null)}
+                                                onDrop={(e) => handleFolderDrop(e, folderName)}
+                                            >
+                                                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                                    {isExpanded
+                                                        ? <ChevronDown size={14} className="text-gray-500 flex-shrink-0" />
+                                                        : <ChevronRight size={14} className="text-gray-500 flex-shrink-0" />
+                                                    }
+                                                    <Folder size={14} className="text-yellow-500 flex-shrink-0" />
+                                                    {renamingFolder === folderName ? (
+                                                        <input
+                                                            className="bg-gray-800 text-sm text-white px-1 py-0.5 rounded border border-gray-600 focus:outline-none focus:border-blue-500 min-w-0 flex-1"
+                                                            value={renameFolderValue}
+                                                            onChange={e => setRenameFolderValue(e.target.value)}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') confirmRenameFolder();
+                                                                if (e.key === 'Escape') { setRenamingFolder(null); setRenameFolderValue(''); }
+                                                            }}
+                                                            onBlur={confirmRenameFolder}
+                                                            onClick={e => e.stopPropagation()}
+                                                            autoFocus
+                                                        />
+                                                    ) : (
+                                                        <span className="text-sm font-medium text-gray-300 truncate">{folderName}</span>
+                                                    )}
+                                                    <span className="text-xs text-gray-600 flex-shrink-0">{folderNotes.length}</span>
+                                                </div>
+                                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); startRenameFolder(folderName); }}
+                                                        className="p-0.5 text-gray-600 hover:text-blue-400 transition-colors"
+                                                        title="Rename folder"
+                                                    >
+                                                        <Edit2 size={12} />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); deleteFolder(folderName); }}
+                                                        className="p-0.5 text-gray-600 hover:text-red-400 transition-colors"
+                                                        title="Delete folder"
+                                                    >
+                                                        <Trash2 size={12} />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Folder contents */}
+                                            {isExpanded && folderNotes.map(note => (
+                                                <div
+                                                    key={note.id}
+                                                    draggable
+                                                    onDragStart={(e) => handleNoteDragStart(e, note.id)}
+                                                    onClick={() => selectNote(note)}
+                                                    className={`pl-8 pr-3 py-2.5 border-b border-gray-800/50 cursor-pointer transition-all duration-150 group relative
+                                                        ${activeNote?.id === note.id
+                                                            ? 'bg-gray-800 border-l-2 border-l-blue-500'
+                                                            : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'}`}
+                                                >
+                                                    <div className="font-medium text-gray-300 text-sm truncate pr-6 flex items-center gap-1.5">
+                                                        {note.title || "Untitled"}
+                                                        {note.type === 'article' && (
+                                                            <Dna size={12} className="text-purple-400 flex-shrink-0" title="Article (evolvable)" />
+                                                        )}
+                                                        {note.type === 'pdf' && (
+                                                            <FileType2 size={12} className="text-red-400 flex-shrink-0" title="PDF" />
+                                                        )}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500 mt-0.5">
+                                                        {new Date((note.updated_at || 0) * 1000).toLocaleDateString()}
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleDelete(note.id); }}
+                                                        className="absolute right-2 top-2.5 p-1 text-gray-600 hover:text-red-400
+                                                            opacity-0 group-hover:opacity-100 transition-all duration-150"
+                                                        title="Delete note"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })}
+
+                                {/* Root notes (no folder) */}
+                                {folderGroups.rootNotes.length > 0 && allFolderNames.length > 0 && (
+                                    <div
+                                        className={`px-3 py-1.5 border-b border-gray-800 text-xs font-semibold text-gray-500 uppercase tracking-wider
+                                            ${dragOverFolder === '__root__' ? 'bg-blue-900/30' : ''}`}
+                                        onDragOver={(e) => handleFolderDragOver(e, '__root__')}
+                                        onDragLeave={() => setDragOverFolder(null)}
+                                        onDrop={(e) => handleFolderDrop(e, null)}
                                     >
-                                        <Trash2 size={14} />
-                                    </button>
-                                </div>
-                            ))
+                                        Root
+                                    </div>
+                                )}
+                                {folderGroups.rootNotes.map(note => (
+                                    <div
+                                        key={note.id}
+                                        draggable
+                                        onDragStart={(e) => handleNoteDragStart(e, note.id)}
+                                        onClick={() => selectNote(note)}
+                                        className={`p-3 border-b border-gray-800 cursor-pointer transition-all duration-150 group relative
+                                            ${activeNote?.id === note.id
+                                                ? 'bg-gray-800 border-l-2 border-l-blue-500'
+                                                : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'}`}
+                                    >
+                                        <div className="font-medium text-gray-300 text-sm truncate pr-6 flex items-center gap-1.5">
+                                            {note.title || "Untitled"}
+                                            {note.type === 'article' && (
+                                                <Dna size={12} className="text-purple-400 flex-shrink-0" title="Article (evolvable)" />
+                                            )}
+                                            {note.type === 'pdf' && (
+                                                <FileType2 size={12} className="text-red-400 flex-shrink-0" title="PDF" />
+                                            )}
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            {new Date((note.updated_at || 0) * 1000).toLocaleDateString()}
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(note.id); }}
+                                            className="absolute right-2 top-3 p-1 text-gray-600 hover:text-red-400
+                                                opacity-0 group-hover:opacity-100 transition-all duration-150"
+                                            title="Delete note"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </>
                         )}
                     </div>
                 </div>

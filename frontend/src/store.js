@@ -727,7 +727,9 @@ export const useStore = create((set, get) => ({
     },
 
     notesList: [],
-    activeNote: null, // { id, title, content, updated_at }
+    activeNote: null, // { id, title, content, updated_at, folder?, type?, pdf_filename? }
+    foldersList: [],  // [{ name, created_at }]
+    expandedFolders: {}, // { folderName: true/false }
 
     fetchNotesList: async (workspaceId) => {
         try {
@@ -737,6 +739,86 @@ export const useStore = create((set, get) => ({
             console.error("Fetch notes list failed", e);
             set({ notesList: [] });
         }
+    },
+
+    fetchFolders: async (workspaceId) => {
+        try {
+            const res = await axios.get(`${API_base}/workspaces/${workspaceId}/notes-folders`);
+            set({ foldersList: res.data.folders || [] });
+        } catch (e) {
+            console.error("Fetch folders failed", e);
+            set({ foldersList: [] });
+        }
+    },
+
+    createFolder: async (name) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+        try {
+            await axios.post(`${API_base}/workspaces/${ws.id}/notes-folders`, { name });
+            set(state => ({
+                foldersList: [...state.foldersList, { name, created_at: Date.now() / 1000 }],
+                expandedFolders: { ...state.expandedFolders, [name]: true }
+            }));
+        } catch (e) {
+            console.error("Create folder failed", e);
+        }
+    },
+
+    renameFolder: async (oldName, newName) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+        try {
+            await axios.put(`${API_base}/workspaces/${ws.id}/notes-folders/${encodeURIComponent(oldName)}`, { new_name: newName });
+            set(state => ({
+                foldersList: state.foldersList.map(f => f.name === oldName ? { ...f, name: newName } : f),
+                notesList: state.notesList.map(n => n.folder === oldName ? { ...n, folder: newName } : n),
+                expandedFolders: (() => {
+                    const ef = { ...state.expandedFolders };
+                    if (oldName in ef) { ef[newName] = ef[oldName]; delete ef[oldName]; }
+                    return ef;
+                })()
+            }));
+        } catch (e) {
+            console.error("Rename folder failed", e);
+        }
+    },
+
+    deleteFolder: async (name) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+        if (!confirm(`Delete folder "${name}"? Notes will be moved to root.`)) return;
+        try {
+            await axios.delete(`${API_base}/workspaces/${ws.id}/notes-folders/${encodeURIComponent(name)}`);
+            set(state => ({
+                foldersList: state.foldersList.filter(f => f.name !== name),
+                notesList: state.notesList.map(n => n.folder === name ? { ...n, folder: null } : n)
+            }));
+        } catch (e) {
+            console.error("Delete folder failed", e);
+        }
+    },
+
+    moveNoteToFolder: async (noteId, folder) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+        const targetFolder = folder || "";
+        set(state => ({
+            notesList: state.notesList.map(n => n.id === noteId ? { ...n, folder: folder || null } : n),
+            activeNote: state.activeNote?.id === noteId ? { ...state.activeNote, folder: folder || null } : state.activeNote
+        }));
+        try {
+            await axios.put(`${API_base}/workspaces/${ws.id}/notes/${noteId}`, { folder: targetFolder });
+        } catch (e) {
+            console.error("Move note failed", e);
+            get().fetchNotesList(ws.id);
+        }
+    },
+
+    toggleFolder: (name) => {
+        set(state => ({
+            expandedFolders: { ...state.expandedFolders, [name]: !state.expandedFolders[name] }
+        }));
     },
 
     selectNote: async (note) => {
@@ -754,12 +836,12 @@ export const useStore = create((set, get) => ({
         }
     },
 
-    createNote: async (title = "Untitled Note", content = "") => {
+    createNote: async (title = "Untitled Note", content = "", folder = null) => {
         const ws = get().currentWorkspace;
         if (!ws) return;
 
         try {
-            const res = await axios.post(`${API_base}/workspaces/${ws.id}/notes`, { title, content });
+            const res = await axios.post(`${API_base}/workspaces/${ws.id}/notes`, { title, content, folder });
             const newNote = res.data;
             set(state => ({
                 notesList: [newNote, ...state.notesList],
@@ -784,7 +866,6 @@ export const useStore = create((set, get) => ({
             await axios.put(`${API_base}/workspaces/${ws.id}/notes/${noteId}`, { title, content });
         } catch (e) {
             console.error("Update note failed", e);
-            // Revert or re-fetch?
             get().selectNote({ id: noteId }); // Re-fetch to sync
         }
     },
@@ -803,6 +884,29 @@ export const useStore = create((set, get) => ({
             }));
         } catch (e) {
             console.error("Delete note failed", e);
+        }
+    },
+
+    uploadPdfNote: async (file, folder = null) => {
+        const ws = get().currentWorkspace;
+        if (!ws) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        if (folder) formData.append('folder', folder);
+        try {
+            const res = await axios.post(
+                `${API_base}/workspaces/${ws.id}/notes/upload-pdf`,
+                formData,
+                { headers: { 'Content-Type': 'multipart/form-data' } }
+            );
+            const newNote = res.data;
+            set(state => ({
+                notesList: [newNote, ...state.notesList],
+                activeNote: newNote
+            }));
+            return newNote;
+        } catch (e) {
+            console.error("PDF upload failed", e);
         }
     },
 
