@@ -426,7 +426,8 @@ async def contemplate_logic(workspace_id: str, n: int = 3, topic: str = None, sa
                     "tags": ["contemplation", "auto-generated"],
                     "created_at": timestamp_iso,
                     "updated_at": timestamp_float, # Must be float for Note model
-                    "workspace_id": workspace_id
+                    "workspace_id": workspace_id,
+                    "folder": None
                 }
                 
                 note_file = os.path.join(mem.workspace_dir, "notes", f"{note_id}.json")

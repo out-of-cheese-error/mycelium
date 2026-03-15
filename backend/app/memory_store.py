@@ -134,16 +134,19 @@ class GraphMemory:
             self._save_graph_unlocked()
             
     # --- Note Embedding Methods ---
-    def index_note(self, note_id: str, title: str, content: str):
+    def index_note(self, note_id: str, title: str, content: str, folder: str = None):
         """Upserts a note's embedding."""
         text = f"Title: {title}\n\nContent:\n{content}"
         embedding = self.embedding_fn.embed_query(text)
-        
+        metadata = {"title": title}
+        if folder:
+            metadata["folder"] = folder
+
         self.note_collection.upsert(
             ids=[note_id],
             embeddings=[embedding],
             documents=[text],
-            metadatas=[{"title": title}]
+            metadatas=[metadata]
         )
         
     def delete_note_embedding(self, note_id: str):
@@ -1312,6 +1315,13 @@ class GraphMemory:
             self.library_collection.delete(where={"source_id": source_id})
         except Exception as e:
             print(f"WARNING: delete_library_source failed: {e}")
+
+    def delete_library_by_source_name(self, source_name: str):
+        """Deletes all chunks matching a source_name."""
+        try:
+            self.library_collection.delete(where={"source_name": source_name})
+        except Exception as e:
+            print(f"WARNING: delete_library_by_source_name failed: {e}")
 
     def get_library_stats(self) -> dict:
         """Returns {chunk_count, source_count}."""

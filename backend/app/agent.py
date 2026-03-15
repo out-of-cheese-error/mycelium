@@ -24,30 +24,32 @@ SKILL_AUTO_INJECT_THRESHOLD = 0.85   # Tier 2: inject full instructions directly
 SKILL_SURFACE_MAX = 5                # Max skills surfaced per turn
 
 @tool
-def create_note(title: str, content: str, workspace_id: str = "default"):
-    """Creates a new note with the given title and Markdown content."""
+def create_note(title: str, content: str, workspace_id: str = "default", folder: str = None):
+    """Creates a new note with the given title and Markdown content. Optionally place it in a folder by passing folder='FolderName'."""
     try:
         note_id = str(uuid.uuid4())[:8]
         path = f"./memory_data/{workspace_id}/notes/{note_id}.json"
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        
+
         data = {
             "id": note_id,
             "title": title,
             "content": content,
-            "updated_at": time.time()
+            "updated_at": time.time(),
+            "folder": folder
         }
         with open(path, 'w') as f:
             json.dump(data, f)
-            
+
         # Sync Embedding
         try:
             mem = GraphMemory(workspace_id=workspace_id, base_dir="./memory_data")
             mem.index_note(note_id, title, content)
         except Exception as e:
-            pass # Fail silently for agent tools to avoid breaking flow? Or return warning?
-            
-        return f"Note created successfully. ID: {note_id}"
+            pass
+
+        folder_info = f" in folder '{folder}'" if folder else ""
+        return f"Note created successfully. ID: {note_id}{folder_info}"
     except Exception as e:
         return f"Failed to create note: {e}"
 
@@ -65,50 +67,69 @@ def read_note(note_id: str, workspace_id: str = "default"):
         return f"Failed to read note: {e}"
 
 @tool
-def update_note(note_id: str, content: str = None, title: str = None, workspace_id: str = "default"):
-    """Updates an existing note. Pass 'content' or 'title' (or both) to update."""
+def update_note(note_id: str, content: str = None, title: str = None, folder: str = None, workspace_id: str = "default"):
+    """Updates an existing note. Pass 'content', 'title', or 'folder' (or any combination) to update. Use folder='' to move to root."""
     try:
         path = f"./memory_data/{workspace_id}/notes/{note_id}.json"
         if not os.path.exists(path):
             return "Note not found."
-            
+
         with open(path, 'r') as f:
             data = json.load(f)
-            
+
         if title: data["title"] = title
         if content: data["content"] = content
+        if folder is not None:
+            data["folder"] = folder if folder != "" else None
         data["updated_at"] = time.time()
-        
+
         with open(path, 'w') as f:
             json.dump(data, f)
-            
+
         # Sync Embedding
         try:
             mem = GraphMemory(workspace_id=workspace_id, base_dir="./memory_data")
-            # We need to make sure we index the FULL content, so use data['title'] and data['content']
             mem.index_note(note_id, data["title"], data["content"])
         except Exception as e:
             pass
-            
+
         return "Note updated successfully."
     except Exception as e:
         return f"Failed to update note: {e}"
 
 @tool
 def list_notes(workspace_id: str = "default"):
-    """Lists all available notes (ID and Title) in the current workspace."""
+    """Lists all available notes (ID and Title) in the current workspace, grouped by folder."""
     try:
         path = f"./memory_data/{workspace_id}/notes"
         if not os.path.exists(path):
             return "No notes found."
-            
-        notes = []
+
+        folder_groups = {}
+        root_notes = []
         for filename in os.listdir(path):
-            if filename.endswith(".json"):
+            if filename.endswith(".json") and filename != "folders.json":
                 with open(os.path.join(path, filename), 'r') as f:
                     data = json.load(f)
-                    notes.append(f"- {data.get('title', 'Untitled')} (ID: {data.get('id')})")
-        return "\n".join(notes) if notes else "No notes found."
+                    folder = data.get('folder')
+                    note_type = data.get('type', '')
+                    type_tag = f", type: {note_type}" if note_type else ""
+                    entry = f"  - {data.get('title', 'Untitled')} (ID: {data.get('id')}{type_tag})"
+                    if folder:
+                        folder_groups.setdefault(folder, []).append(entry)
+                    else:
+                        root_notes.append(entry)
+
+        lines = []
+        for folder_name, entries in sorted(folder_groups.items()):
+            lines.append(f"[{folder_name}]")
+            lines.extend(entries)
+        if root_notes:
+            if lines:
+                lines.append("[Root]")
+            lines.extend(root_notes)
+
+        return "\n".join(lines) if lines else "No notes found."
     except Exception as e:
         return f"Failed to list notes: {e}"
 
@@ -118,14 +139,26 @@ def delete_note(note_id: str, workspace_id: str = "default"):
     try:
         path = f"./memory_data/{workspace_id}/notes/{note_id}.json"
         if os.path.exists(path):
+            # Read note data for cleanup
+            note_data = {}
+            try:
+                with open(path, 'r') as f:
+                    note_data = json.load(f)
+                pdf_filename = note_data.get("pdf_filename")
+                if pdf_filename:
+                    pdf_path = f"./memory_data/{workspace_id}/notes/pdfs/{pdf_filename}"
+                    if os.path.exists(pdf_path):
+                        os.remove(pdf_path)
+            except:
+                pass
+
             os.remove(path)
-            # Try to remove embedding, but we can't easily access GraphMemory here without base_dir context?
-            # Ideally the agent calls the API, but here we are acting DIRECTLY.
-            # We should probably replicate the sync logic or use the API endpoint logic (but we are in backend).
-            # Let's instantiate GraphMemory.
             try:
                 mem = GraphMemory(workspace_id=workspace_id, base_dir="./memory_data")
                 mem.delete_note_embedding(note_id)
+                note_title = note_data.get("title")
+                if note_title:
+                    mem.delete_library_by_source_name(f"[note:{note_id}] {note_title}")
             except:
                 pass
             return "Note deleted."
@@ -1755,26 +1788,45 @@ def generate_node(state: AgentState, config: RunnableConfig):
     except:
         pass
 
-    # Load Notes List
+    # Load Notes List (organized by folder)
     notes_context = ""
     try:
         notes_dir = f"./memory_data/{workspace_id}/notes"
         if os.path.exists(notes_dir):
-            note_headers = []
+            folder_groups = {}
+            root_notes = []
             for filename in os.listdir(notes_dir):
-                if filename.endswith(".json"):
+                if filename.endswith(".json") and filename != "folders.json":
                     with open(os.path.join(notes_dir, filename), 'r') as f:
                         data = json.load(f)
-                        note_headers.append(f"- {data.get('title', 'Untitled')} (ID: {data.get('id')})")
-            
-            if note_headers:
+                        folder = data.get('folder')
+                        note_type = data.get('type', '')
+                        type_tag = f", type: {note_type}" if note_type else ""
+                        entry = f"  - {data.get('title', 'Untitled')} (ID: {data.get('id')}{type_tag})"
+                        if folder:
+                            folder_groups.setdefault(folder, []).append(entry)
+                        else:
+                            root_notes.append(entry)
+
+            note_lines = []
+            for folder_name, entries in sorted(folder_groups.items()):
+                note_lines.append(f"[{folder_name}]")
+                note_lines.extend(entries)
+            if root_notes:
+                if note_lines:
+                    note_lines.append("[Root]")
+                note_lines.extend(root_notes)
+
+            if note_lines:
                 notes_context = f"""
     AVAILABLE NOTES:
-    {chr(10).join(note_headers)}
+    {chr(10).join(note_lines)}
     - You can use 'read_note(note_id)' to read the full content of any note.
     - You can use 'list_notes' to see this list again.
     - You can use 'search_notes(query)' to semantically search across all notes (RAG).
-    - You can use 'create_note', 'update_note', or 'delete_note' to manage them.
+    - You can use 'create_note(title, content, folder="FolderName")' to create a note in a folder.
+    - You can use 'update_note(note_id, folder="FolderName")' to move a note to a folder (folder="" for root).
+    - You can use 'delete_note' to remove a note.
     """
     except:
         pass

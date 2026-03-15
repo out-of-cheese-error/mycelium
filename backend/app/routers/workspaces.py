@@ -441,14 +441,18 @@ class Note(BaseModel):
     content: str
     updated_at: float
     type: Optional[str] = None
+    folder: Optional[str] = None
+    pdf_filename: Optional[str] = None
 
 class CreateNoteRequest(BaseModel):
     title: str
     content: str
+    folder: Optional[str] = None
 
 class UpdateNoteRequest(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
+    folder: Optional[str] = None
 
 def get_notes_dir(workspace_id: str):
     base_path = os.path.join(MEMORY_BASE_DIR, workspace_id)
@@ -486,7 +490,7 @@ async def list_notes(workspace_id: str):
     notes = []
     
     for filename in os.listdir(notes_dir):
-        if filename.endswith(".json"):
+        if filename.endswith(".json") and filename != "folders.json":
             try:
                 with open(os.path.join(notes_dir, filename), 'r') as f:
                     data = json.load(f)
@@ -507,7 +511,8 @@ async def create_note(workspace_id: str, request: CreateNoteRequest):
         id=note_id,
         title=request.title or "Untitled Note",
         content=request.content or "",
-        updated_at=time.time()
+        updated_at=time.time(),
+        folder=request.folder
     )
     
     with open(os.path.join(notes_dir, f"{note_id}.json"), 'w') as f:
@@ -521,6 +526,103 @@ async def create_note(workspace_id: str, request: CreateNoteRequest):
         print(f"Embedding sync failed: {e}")
         
     return note
+
+# --- PDF Upload & Serving ---
+# These routes MUST be defined before the generic /{workspace_id}/notes/{note_id} route
+# to avoid FastAPI matching "upload-pdf" or "pdfs" as a note_id.
+
+@router.post("/{workspace_id}/notes/upload-pdf", response_model=Note)
+async def upload_pdf_note(
+    workspace_id: str,
+    file: UploadFile = File(...),
+    folder: Optional[str] = Form(None),
+):
+    # Validate PDF
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+
+    notes_dir = get_notes_dir(workspace_id)
+    pdfs_dir = os.path.join(notes_dir, "pdfs")
+    os.makedirs(pdfs_dir, exist_ok=True)
+
+    note_id = str(uuid.uuid4())[:8]
+    pdf_filename = f"{note_id}.pdf"
+    pdf_path = os.path.join(pdfs_dir, pdf_filename)
+
+    # Save PDF file
+    content_bytes = await file.read()
+    with open(pdf_path, 'wb') as f:
+        f.write(content_bytes)
+
+    # Extract text from PDF for search/embeddings
+    extracted_text = ""
+    pages = []
+    try:
+        from langchain_community.document_loaders import PyPDFLoader
+        loader = PyPDFLoader(pdf_path)
+        pages = loader.load()
+        extracted_text = "\n\n".join(page.page_content for page in pages)
+        # Truncate display content (the full text is chunked into library below)
+        if len(extracted_text) > 50000:
+            display_text = extracted_text[:50000] + "\n\n[... truncated ...]"
+        else:
+            display_text = extracted_text
+    except Exception as e:
+        print(f"PDF text extraction failed: {e}")
+        extracted_text = f"[PDF: {file.filename}]"
+        display_text = extracted_text
+
+    title = file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename
+
+    note = Note(
+        id=note_id,
+        title=title,
+        content=display_text,
+        updated_at=time.time(),
+        type="pdf",
+        folder=folder if folder else None,
+        pdf_filename=pdf_filename
+    )
+
+    with open(os.path.join(notes_dir, f"{note_id}.json"), 'w') as f:
+        json.dump(note.dict(), f, indent=2)
+
+    # Index for semantic search (single embedding for note-level search)
+    try:
+        mem = GraphMemory(workspace_id=workspace_id, base_dir=MEMORY_BASE_DIR)
+        mem.index_note(note_id, title, display_text)
+    except Exception as e:
+        print(f"PDF note embedding sync failed: {e}")
+
+    # Chunk into library for proper RAG (reuses existing library chunking pipeline)
+    try:
+        from app.document_processor import process_file_library
+        import asyncio
+        asyncio.ensure_future(
+            process_file_library(
+                pdf_path, workspace_id,
+                chunk_size=4800, chunk_overlap=400,
+                source_name=f"[note:{note_id}] {title}"
+            )
+        )
+    except Exception as e:
+        print(f"PDF library chunking failed: {e}")
+
+    return note
+
+@router.get("/{workspace_id}/notes/pdfs/{filename}")
+async def serve_pdf(workspace_id: str, filename: str):
+    # Security: prevent directory traversal
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    from fastapi.responses import FileResponse
+    notes_dir = get_notes_dir(workspace_id)
+    path = os.path.join(notes_dir, "pdfs", filename)
+
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="PDF not found")
+    return FileResponse(path, media_type="application/pdf")
 
 @router.get("/{workspace_id}/notes/{note_id}", response_model=Note)
 async def get_note(workspace_id: str, note_id: str):
@@ -549,7 +651,9 @@ async def update_note(workspace_id: str, note_id: str, request: UpdateNoteReques
         data["title"] = request.title
     if request.content is not None:
         data["content"] = request.content
-    
+    if request.folder is not None:
+        data["folder"] = request.folder if request.folder != "" else None
+
     data["updated_at"] = time.time()
     
     with open(path, 'w') as f:
@@ -568,19 +672,126 @@ async def update_note(workspace_id: str, note_id: str, request: UpdateNoteReques
 async def delete_note(workspace_id: str, note_id: str):
     notes_dir = get_notes_dir(workspace_id)
     path = os.path.join(notes_dir, f"{note_id}.json")
-    
+
     if os.path.exists(path):
+        # Read note data to check for PDF file and library chunks
+        note_title = None
+        try:
+            with open(path, 'r') as f:
+                data = json.load(f)
+            note_title = data.get("title")
+            pdf_filename = data.get("pdf_filename")
+            if pdf_filename:
+                pdf_path = os.path.join(notes_dir, "pdfs", pdf_filename)
+                if os.path.exists(pdf_path):
+                    os.remove(pdf_path)
+        except:
+            pass
+
         os.remove(path)
-        
+
         # Sync Embedding
         try:
             mem = GraphMemory(workspace_id=workspace_id, base_dir=MEMORY_BASE_DIR)
             mem.delete_note_embedding(note_id)
+            # Also remove library chunks if this was a PDF note
+            if note_title:
+                mem.delete_library_by_source_name(f"[note:{note_id}] {note_title}")
         except Exception as e:
             print(f"Embedding sync failed: {e}")
-            
+
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Note not found")
+
+# --- Folder Management ---
+
+def _get_folders_path(workspace_id: str):
+    notes_dir = get_notes_dir(workspace_id)
+    return os.path.join(notes_dir, "folders.json")
+
+def _read_folders(workspace_id: str):
+    path = _get_folders_path(workspace_id)
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            return json.load(f).get("folders", [])
+    return []
+
+def _write_folders(workspace_id: str, folders: list):
+    path = _get_folders_path(workspace_id)
+    with open(path, 'w') as f:
+        json.dump({"folders": folders}, f, indent=2)
+
+class CreateFolderRequest(BaseModel):
+    name: str
+
+class RenameFolderRequest(BaseModel):
+    new_name: str
+
+@router.get("/{workspace_id}/notes-folders")
+async def list_folders(workspace_id: str):
+    return {"folders": _read_folders(workspace_id)}
+
+@router.post("/{workspace_id}/notes-folders")
+async def create_folder(workspace_id: str, request: CreateFolderRequest):
+    folders = _read_folders(workspace_id)
+    if any(f["name"] == request.name for f in folders):
+        raise HTTPException(status_code=400, detail="Folder already exists")
+    folders.append({"name": request.name, "created_at": time.time()})
+    _write_folders(workspace_id, folders)
+    return {"status": "created", "name": request.name}
+
+@router.put("/{workspace_id}/notes-folders/{folder_name}")
+async def rename_folder(workspace_id: str, folder_name: str, request: RenameFolderRequest):
+    folders = _read_folders(workspace_id)
+    found = False
+    for f in folders:
+        if f["name"] == folder_name:
+            f["name"] = request.new_name
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    _write_folders(workspace_id, folders)
+
+    # Update all notes in this folder
+    notes_dir = get_notes_dir(workspace_id)
+    for filename in os.listdir(notes_dir):
+        if filename.endswith(".json") and filename != "folders.json":
+            filepath = os.path.join(notes_dir, filename)
+            try:
+                with open(filepath, 'r') as f:
+                    data = json.load(f)
+                if data.get("folder") == folder_name:
+                    data["folder"] = request.new_name
+                    with open(filepath, 'w') as f:
+                        json.dump(data, f, indent=2)
+            except:
+                continue
+    return {"status": "renamed", "old_name": folder_name, "new_name": request.new_name}
+
+@router.delete("/{workspace_id}/notes-folders/{folder_name}")
+async def delete_folder(workspace_id: str, folder_name: str):
+    folders = _read_folders(workspace_id)
+    new_folders = [f for f in folders if f["name"] != folder_name]
+    if len(new_folders) == len(folders):
+        raise HTTPException(status_code=404, detail="Folder not found")
+    _write_folders(workspace_id, new_folders)
+
+    # Move notes from deleted folder to root
+    notes_dir = get_notes_dir(workspace_id)
+    for filename in os.listdir(notes_dir):
+        if filename.endswith(".json") and filename != "folders.json":
+            filepath = os.path.join(notes_dir, filename)
+            try:
+                with open(filepath, 'r') as f:
+                    data = json.load(f)
+                if data.get("folder") == folder_name:
+                    data["folder"] = None
+                    with open(filepath, 'w') as f:
+                        json.dump(data, f, indent=2)
+            except:
+                continue
+    return {"status": "deleted"}
 
 class GeneratePersonaRequest(BaseModel):
     cues: str
