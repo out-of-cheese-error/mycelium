@@ -15,17 +15,22 @@ MyCelium combines the power of LLMs with a knowledge graph to create an AI assis
 ## Features
 
 - **Knowledge Graph Memory** - Automatically extracts entities and relationships from conversations using NetworkX and ChromaDB
-- **Multi-Source Ingestion** - Import knowledge from Wikipedia, Project Gutenberg, bioRxiv, web pages, and more
+- **Library (RAG Document Store)** - Fast two-level knowledge base: chunk and embed documents for instant semantic search, then optionally promote results into the knowledge graph
+- **Article Generation** - Generate long-form articles from your knowledge graph with automatic outlining, section-by-section writing, and evolutionary optimization (genetic algorithm)
+- **Multi-Source Ingestion** - Import knowledge from Wikipedia, Project Gutenberg, bioRxiv, arXiv, web pages, PDFs, and more — with optional auto-translation
 - **Interactive Graph Visualization** - Explore and chat with your knowledge graph directly with a force-directed 2D visualization
-- **Multiple Workspaces** - Create isolated memory contexts for different topics or projects
+- **Multiple Workspaces** - Create isolated memory contexts for different topics or projects, and expose workspaces as callable tools for cross-workspace queries
 - **Notes System** - Create, search, and manage notes with semantic search (RAG)
 - **Concept Clustering** - Automatically identify themes and topics in your knowledge graph
 - **Hot Topics & Connectors** - Discover the most important and bridging nodes in your graph
+- **Voice Calls** - Live voice conversations with the AI via WebSocket (ASR + LLM + TTS streaming pipeline)
+- **Text-to-Speech** - Built-in streaming TTS powered by [VibeVoice](https://github.com/microsoft/VibeVoice) with 19 voices (optional, GPU-accelerated)
+- **TTS Reader** - Paste text or load a URL and have it read aloud paragraph by paragraph
+- **Terminal** - Workspace-aware tmux terminal in the browser with LLM-assisted command execution
 - **Reddit Integration** - Search and browse Reddit discussions
 - **Emotional State System** - The bot has emotions that evolve based on interactions
-- **Text-to-Speech** - Built-in streaming TTS powered by [VibeVoice](https://github.com/microsoft/VibeVoice) with 19 voices (optional, GPU-accelerated)
 - **Growth Engine** - Let the bot explore and expand its knowledge autonomously
-- **theWay (Skills)** - Teach the AI reusable skills it can look up and follow
+- **theWay (Skills)** - Teach the AI reusable skills with automatic discovery — skills are surfaced or injected based on message relevance
 - **Chrome Extension** - Browser sidebar for quick chat and one-click page ingestion
 
 ---
@@ -45,8 +50,17 @@ You can add knowledge to your graph in several ways:
 
 - **Chat naturally** - The bot automatically extracts entities and relationships from conversations
 - **Wikipedia** - Ask the bot to ingest a Wikipedia article: *"Ingest the Wikipedia article about quantum computing"*
-- **Web pages** - Ask the bot to read a URL: *"Summarize https://example.com/article"* (if the page is too long, it will automatically ingest it into the graph first, then summarize) 
+- **Web pages** - Ask the bot to read a URL: *"Summarize https://example.com/article"* (if the page is too long, it will automatically ingest it into the graph first, then summarize)
 - **Project Gutenberg** - Ingest free ebooks: *"Find and ingest 'Pride and Prejudice' from Gutenberg"*
+- **File upload** - Upload PDFs, TXT, or Markdown files directly from the sidebar
+- **arXiv** - Search and ingest research papers: *"Search arXiv for transformer architectures"*
+
+**Ingestion targets**: Use the sidebar toggle to choose where content goes:
+- **Graph** - Full entity extraction with LLM (default)
+- **Library** - Fast chunk-and-embed only (no LLM, instant)
+- **Both** - Ingest to graph and library simultaneously
+
+**Auto-translation**: Set a target language in the sidebar to automatically translate all extracted entities and descriptions during ingestion.
 
 ![Ingesting Content](screenshots/ingestion.jpg)
 
@@ -133,6 +147,72 @@ Teach the AI reusable skills that it can look up and follow when prompted:
    - *"Follow your data analysis skill to interpret these numbers"*
 
 The AI will search for matching skills and follow the instructions you provided.
+
+**Automatic skill discovery**: Skills can also be surfaced automatically based on message relevance. Configure thresholds in workspace settings:
+- **Surface threshold** (default 0.50) — shows skill title + summary as a hint
+- **Auto-inject threshold** (default 0.85) — injects the full skill instructions into context
+
+---
+
+### Library (RAG Document Store)
+
+The Library is a fast, two-level knowledge base for storing and searching documents without the overhead of full graph extraction:
+
+1. **Add documents** — Go to the **Library** tab, then upload files (PDF, TXT, MD) or ingest URLs. Documents are chunked and embedded instantly.
+2. **Search** — Semantic search returns the most relevant chunks across all your library sources.
+3. **Promote to Graph** — Select search results and extract entities/relationships into the knowledge graph with one click.
+4. **Browse sources** — View all ingested sources, read their chunks, or delete them.
+
+The bot can also interact with the library via chat:
+- *"Search the library for machine learning basics"*
+- *"Add this Wikipedia article to the library"*
+- *"Promote library results about neural networks to the graph"*
+
+---
+
+### Article Generation
+
+Generate long-form articles from your knowledge graph:
+
+1. Go to the **Notes** tab and click the article generation button
+2. Enter a topic and choose a mode:
+   - **Existing** — uses only your current knowledge graph
+   - **Research** — searches external sources (Wikipedia, arXiv, web) to supplement
+3. The system clusters related graph nodes, creates a hierarchical outline, and writes each section using relevant graph context
+4. The finished article is saved as a note
+
+**Evolutionary optimization**: After generating an article, use the **Evolve** feature to iteratively improve it using a genetic algorithm. The system scores articles on grounding, consistency, coherence, and completeness, then generates variants until the quality converges.
+
+---
+
+### Voice Calls
+
+Have a live voice conversation with the AI:
+
+1. Go to the **Call** tab (phone icon)
+2. Click to start a call — your microphone streams audio via WebSocket
+3. Speech is transcribed (ASR via Deepgram), sent to the LLM, and the response is streamed back as audio
+4. The full transcript is saved to your thread history
+
+---
+
+### TTS Reader
+
+Read text or web content aloud paragraph by paragraph:
+
+1. Go to the **Reader** tab (audio icon)
+2. Paste text or load a URL
+3. Playback proceeds paragraph by paragraph with controls to skip, pause, or adjust voice
+
+---
+
+### Terminal
+
+Access a workspace-aware terminal directly in the browser:
+
+1. Go to the **Terminal** tab
+2. An interactive tmux session opens, persistent across page refreshes
+3. Use the terminal chat to describe tasks in natural language — the LLM translates them to shell commands and executes them
 
 ---
 
@@ -566,10 +646,30 @@ The UI will be available at `http://localhost:5173`
 | `/concepts/generate` | POST | Generate new concepts |
 | `/hot_topics/{workspace_id}` | GET | Get highly connected nodes |
 | `/connectors/{workspace_id}` | GET | Get connector/bridge nodes |
-| `/graph_chat/{workspace_id}/chat` | POST | Chat with graph context |
-| `/graph_chat/{workspace_id}/node/{node_id}` | GET | Get node details |
+| `/graph/{workspace_id}/chat` | POST | Chat with graph context (streaming, returns retrieved nodes/edges) |
+| `/graph/{workspace_id}/node/{node_id}` | GET | Get node details with neighbors |
 | `/workspaces/{id}/graph/export` | GET | Export graph data |
 | `/workspaces/{id}/graph/import` | POST | Import graph data |
+
+### Library
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/library/{workspace_id}/search` | POST | Semantic search over library chunks |
+| `/library/{workspace_id}/sources` | GET | List all library sources with chunk counts |
+| `/library/{workspace_id}/source/{source_id}/chunks` | GET | Get all chunks for a source |
+| `/library/{workspace_id}/source/{source_id}` | DELETE | Delete a source and its chunks |
+| `/library/{workspace_id}/stats` | GET | Get library statistics |
+| `/library/{workspace_id}/upload` | POST | Upload a file to the library |
+| `/library/{workspace_id}/ingest-url` | POST | Ingest a URL into the library |
+| `/library/{workspace_id}/promote` | POST | Search library and extract entities into the graph |
+
+### Articles
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/articles/generate` | POST | Generate a long-form article (streaming NDJSON) |
+| `/articles/evolve` | POST | Evolve an article note with genetic optimization (streaming NDJSON) |
 
 ### Growth Engine
 
@@ -595,6 +695,19 @@ The UI will be available at `http://localhost:5173`
 | `/audio/stream` | GET | Stream audio via query parameter |
 | `/audio/test` | GET | Test TTS connectivity and list voices |
 
+### Voice Call
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/call/ws` | WebSocket | Live voice call (mic audio in, TTS audio out) |
+
+### Terminal
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/terminal/{workspace_id}/ws` | WebSocket | Interactive terminal session via tmux |
+| `/terminal/{workspace_id}/chat` | POST | Natural language to shell commands (streaming) |
+
 ### System
 
 | Endpoint | Method | Description |
@@ -614,6 +727,7 @@ The LangGraph agent has access to various tools:
 
 - **Notes**: `create_note`, `read_note`, `update_note`, `delete_note`, `search_notes`, `list_notes`
 - **Graph**: `add_graph_node`, `update_graph_node`, `delete_graph_node`, `add_graph_edge`, `update_graph_edge`, `delete_graph_edge`, `search_graph_nodes`, `traverse_graph_node`
+- **Library**: `search_library`, `promote_library_search`, `add_gutenberg_book_to_library`, `add_wiki_article_to_library`
 - **Search**: `duckduckgo_search`, `search_images`, `search_concepts`
 - **Web**: `visit_page`, `ingest_web_page`
 - **Wikipedia**: `search_wikipedia`, `ingest_wikipedia_page`
@@ -622,5 +736,7 @@ The LangGraph agent has access to various tools:
 - **Research**: `search_biorxiv`, `read_biorxiv_abstract`, `search_arxiv`, `read_arxiv_abstract`, `ingest_arxiv_paper`
 - **Learning**: `generate_lesson`
 - **Skills (theWay)**: `lookup_skill`, `create_skill`
+- **Terminal**: `execute_terminal_command`
+- **Cross-workspace**: `consult_workspace` (query other workspaces exposed as tools)
 
 ---
